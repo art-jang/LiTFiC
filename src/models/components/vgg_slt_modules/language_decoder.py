@@ -37,7 +37,7 @@ class LanguageDecoder(nn.Module):
     def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100):
         if previous_contexts is not None:
             questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
-                         else q + ' And the given word is as follows: '  for q, c in zip(questions, previous_contexts)]
+                         else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
             
         max_len = 0
         labels = []
