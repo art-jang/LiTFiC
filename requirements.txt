@@ -29,4 +29,7 @@ lightning-bolts==0.7.0
 lightning-flash==0.8.1
 lightning-utilities==0.11.2
 flash-attn==2.5.9.post1
+pycocoevalcap==1.2
+numpy==1.26.1
+tensorboard==2.17.0
 # sh            # for running bash commands in some tests (linux/macos only)
