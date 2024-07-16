@@ -3,10 +3,16 @@ from typing import Any, Dict, Tuple
 import torch
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
 
+from src.models.components.loss_modules.ce_loss import CELoss
+from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 
-class MNISTLitModule(LightningModule):
+from pycocoevalcap.bleu.bleu import Bleu
+from pycocoevalcap.meteor.meteor import Meteor
+from pycocoevalcap.rouge.rouge import Rouge
+from pycocoevalcap.cider.cider import Cider
+
+class SLTLitModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
 
     A `LightningModule` implements 8 key methods:
@@ -44,6 +50,7 @@ class MNISTLitModule(LightningModule):
         net: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
+        scheduler_options: dict,
         compile: bool,
     ) -> None:
         """Initialize a `MNISTLitModule`.
@@ -61,20 +68,20 @@ class MNISTLitModule(LightningModule):
         self.net = net
 
         # loss function
-        self.criterion = torch.nn.CrossEntropyLoss()
-
-        # metric objects for calculating and averaging accuracy across batches
-        self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        self.test_acc = Accuracy(task="multiclass", num_classes=10)
+        self.criterion = CELoss()
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.test_loss = MeanMetric()
 
-        # for tracking best so far validation accuracy
-        self.val_acc_best = MaxMetric()
+        # for evaluation
+        self.bleu = Bleu(4)
+        self.rouge = Rouge()
+        self.cider = Cider()
+
+        self.all_preds =[]
+        self.all_gts = []
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -89,8 +96,6 @@ class MNISTLitModule(LightningModule):
         # by default lightning executes validation step sanity checks before training starts,
         # so it's worth to make sure validation metrics don't store results from these checks
         self.val_loss.reset()
-        self.val_acc.reset()
-        self.val_acc_best.reset()
 
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -104,11 +109,20 @@ class MNISTLitModule(LightningModule):
             - A tensor of predictions.
             - A tensor of target labels.
         """
-        x, y = batch
-        logits = self.forward(x)
-        loss = self.criterion(logits, y)
-        preds = torch.argmax(logits, dim=1)
-        return loss, preds, y
+        outputs, labels = self.forward(batch)
+        loss = self.criterion(outputs, labels)
+        if not self.training:
+            preds = outputs.logits.argmax(dim=-1)
+            for pred, gt in zip(preds, labels):
+                valid_len = gt[gt != -100].size(0)
+                decoded_pred = self.net.language_decoder.tokenizer.decode(pred[-valid_len:-1], skip_special_tokens=True)
+                decoded_gt = self.net.language_decoder.tokenizer.decode(gt[-valid_len:-1], skip_special_tokens=True)
+                self.all_preds.append(decoded_pred)
+                self.all_gts.append(decoded_gt)
+        else:
+            preds = None
+
+        return loss, preds, labels
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -120,13 +134,12 @@ class MNISTLitModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, preds, labels = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
-        self.train_acc(preds, targets)
-        self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("lr", self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0], on_step=True, on_epoch=False)
 
         # return loss or backpropagation will fail
         return loss
@@ -146,17 +159,24 @@ class MNISTLitModule(LightningModule):
 
         # update and log metrics
         self.val_loss(loss)
-        self.val_acc(preds, targets)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        acc = self.val_acc.compute()  # get current val acc
-        self.val_acc_best(acc)  # update best so far val acc
-        # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
-        # otherwise metric would be reset by lightning after each epoch
-        self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+        if self.global_step > 0:
+            hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
+            references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
+
+            bleu_score = self.bleu.compute_score(hypotheses, references)[0][3]
+            rouge_score = self.rouge.compute_score(references, hypotheses)[0]
+            cider_score = self.cider.compute_score(references, hypotheses)[0]
+
+            self.log("val/bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
+            self.log("val/rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
+            self.log("val/cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
+
+            self.all_preds = []
+            self.all_gts = []
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
@@ -169,9 +189,7 @@ class MNISTLitModule(LightningModule):
 
         # update and log metrics
         self.test_loss(loss)
-        self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
@@ -201,13 +219,20 @@ class MNISTLitModule(LightningModule):
         optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
+            if self.hparams.scheduler_options.interval == "step":
+                if isinstance(scheduler, LinearWarmupCosineAnnealingLR):
+                    scheduler.max_epochs *= self.trainer.fit_loop._data_source.instance.max_steps
+                    scheduler.warmup_epochs *= self.trainer.fit_loop._data_source.instance.max_steps # divide by num gpus
+
+                    scheduler.max_epochs //= self.hparams.scheduler_options.divide_step
+                    scheduler.warmup_epochs //= self.hparams.scheduler_options.divide_step
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {
                     "scheduler": scheduler,
-                    "monitor": "val/loss",
-                    "interval": "epoch",
-                    "frequency": 1,
+                    "monitor": self.hparams.scheduler_options.monitor,
+                    "interval": self.hparams.scheduler_options.interval,
+                    "frequency": self.hparams.scheduler_options.frequency,
                 },
             }
         return {"optimizer": optimizer}

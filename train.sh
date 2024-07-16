@@ -1,0 +1,1 @@
+python src/train.py trainer=ddp trainer.devices=[0,1,2,3,4,5,6,7] task_name=vgg_slt_8gpus data=bobsl data.batch_size=32 data.num_workers=32

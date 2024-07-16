@@ -1,0 +1,41 @@
+_target_: src.models.slt_module.SLTLitModule
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.0001
+  weight_decay: 0.
+
+scheduler:
+  _target_: pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR
+  _partial_: true
+  warmup_epochs: 1
+  max_epochs: ${trainer.max_epochs}
+  warmup_start_lr: 0
+
+scheduler_options:
+  monitor: val/loss
+  frequency: 1
+  interval: step # epoch
+  divide_step: ${trainer.accumulate_grad_batches}
+
+net:
+  _target_: src.models.components.vgg_slt.VggSLTNet
+  load_features: ${data.dataset_config.load_features}
+  precision: ${trainer.precision}
+  visual_encoder_config:
+    encoder_type: null
+    out_dim: 768
+  mm_projector_config:
+    mm_hidden_size: ${model.net.visual_encoder_config.out_dim}
+    hidden_size: ${model.net.language_decoder_config.hidden_size}
+    projector_type: mlp2x_gelu
+  language_decoder_config:
+    hidden_size: 3072
+    pretrained_llm: ${paths.llm_root}
+    gradient_checkpointing_enable: True
+    freeze_decoder: True
+    attn_implementation: flash_attention_2
+
+# compile model for faster training with pytorch 2.0
+compile: false

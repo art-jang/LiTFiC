@@ -1,7 +1,7 @@
 # --------- pytorch --------- #
 torch>=2.0.0
 torchvision>=0.15.0
-lightning>=2.0.0
+lightning==2.3.0
 torchmetrics>=0.11.4
 
 # --------- hydra --------- #
@@ -21,4 +21,12 @@ rootutils       # standardizing the project root setup
 pre-commit      # hooks for applying linters on commit
 rich            # beautiful text formatting in terminal
 pytest          # tests
+einops
+lmdb
+transformers==4.41.2
+pytorch-lightning-bolts==0.3.2.post1
+lightning-bolts==0.7.0
+lightning-flash==0.8.1
+lightning-utilities==0.11.2
+flash-attn==2.5.9.post1
 # sh            # for running bash commands in some tests (linux/macos only)
