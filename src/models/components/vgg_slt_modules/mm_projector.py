@@ -7,7 +7,6 @@ class MMProjector(nn.Module):
                  projector_type,
                  mm_hidden_size,
                  hidden_size,
-                 precision,
                  **kwargs):
         super(MMProjector, self).__init__()
         self.projector_type = projector_type

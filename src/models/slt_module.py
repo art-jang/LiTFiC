@@ -113,12 +113,18 @@ class SLTLitModule(LightningModule):
         loss = self.criterion(outputs, labels)
         if not self.training:
             preds = outputs.logits.argmax(dim=-1)
-            for pred, gt in zip(preds, labels):
+            for idx, (pred, gt) in enumerate(zip(preds, labels)):
                 valid_len = gt[gt != -100].size(0)
-                decoded_pred = self.net.language_decoder.tokenizer.decode(pred[-valid_len:-1], skip_special_tokens=True)
-                decoded_gt = self.net.language_decoder.tokenizer.decode(gt[-valid_len:-1], skip_special_tokens=True)
+                s_idx = torch.nonzero(torch.where(gt == -100, 0, gt), as_tuple=False)[0]
+
+                decoded_pred = self.net.language_decoder.tokenizer.decode(pred[s_idx:s_idx+valid_len], skip_special_tokens=True)
+                decoded_gt = self.net.language_decoder.tokenizer.decode(gt[s_idx:s_idx+valid_len], skip_special_tokens=True)
+
                 self.all_preds.append(decoded_pred)
                 self.all_gts.append(decoded_gt)
+
+                print(f"GT: {decoded_gt}")
+                print(f"Pred: {decoded_pred}")
         else:
             preds = None
 

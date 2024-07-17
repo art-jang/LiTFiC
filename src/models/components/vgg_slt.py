@@ -13,7 +13,7 @@ class VggSLTNet(nn.Module):
         self,
         visual_encoder_config: dict,
         mm_projector_config: dict,
-        language_decoder_config: dict,
+        llm_config: dict,
         load_features: bool = False,
         precision: bool = "float32",
     ) -> None:
@@ -28,8 +28,8 @@ class VggSLTNet(nn.Module):
         super().__init__()
         self.load_features = load_features
         # self.visual_encoder = VisualEncoder(**visual_encoder_config, load_features=load_features, precision=precision)
-        self.mm_projector = MMProjector(**mm_projector_config, precision=precision)
-        self.language_decoder = LanguageDecoder(**language_decoder_config, precision=precision)
+        self.mm_projector = MMProjector(**mm_projector_config)
+        self.language_decoder = LanguageDecoder(**llm_config, precision=precision)
 
     def forward(self, batch: dict) -> torch.Tensor:
         if self.load_features:

@@ -1,0 +1,39 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: bobsl
+  - override /model: vgg_slt
+  - override /callbacks: default
+  - override /trainer: ddp
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["vgg_slt", "phi-3"]
+
+seed: 12345
+
+trainer:
+  min_epochs: 10
+  max_epochs: 10
+  gradient_clip_val: 1.0
+  devices: [3]
+
+data:
+  batch_size: 4
+  num_workers: 16
+
+paths:
+  llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
+
+model:
+  net:
+    mm_projector_config:
+      hidden_size: 3072
+    llm_config:
+      tokenizer_config:
+        padding_side: left
+        use_fast: True

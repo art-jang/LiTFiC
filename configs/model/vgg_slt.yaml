@@ -28,14 +28,21 @@ net:
     out_dim: 768
   mm_projector_config:
     mm_hidden_size: ${model.net.visual_encoder_config.out_dim}
-    hidden_size: ${model.net.language_decoder_config.hidden_size}
-    projector_type: mlp2x_gelu
-  language_decoder_config:
     hidden_size: 3072
+    projector_type: mlp2x_gelu
+  llm_config:
     pretrained_llm: ${paths.llm_root}
     gradient_checkpointing_enable: True
     freeze_decoder: True
-    attn_implementation: flash_attention_2
+    tokenizer_config:
+      padding_side: left
+      trust_remote_code: True
+      use_fast: False
+      add_eos_token: True
+    decoder_config:
+      trust_remote_code: True
+      attn_implementation: flash_attention_2
 
 # compile model for faster training with pytorch 2.0
 compile: false
+
