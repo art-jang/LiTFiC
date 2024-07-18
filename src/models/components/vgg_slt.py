@@ -40,7 +40,7 @@ class VggSLTNet(nn.Module):
         previous_contexts = batch["previous_contexts"] if batch["previous_contexts"][0] is not None else None
 
         # x = self.visual_encoder(x, masks)        
-        x = self.mm_projector(x)
+        x, masks = self.mm_projector(x, masks=masks)
         outputs, labels = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,

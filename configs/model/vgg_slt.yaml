@@ -30,6 +30,13 @@ net:
     mm_hidden_size: ${model.net.visual_encoder_config.out_dim}
     hidden_size: 3072
     projector_type: mlp2x_gelu
+    pooling_config:
+      adaptive_pool: True
+      early_fusion: True
+      nhead: 8
+      activation: gelu
+      batch_first: True
+      depth: 2
   llm_config:
     pretrained_llm: ${paths.llm_root}
     gradient_checkpointing_enable: True
