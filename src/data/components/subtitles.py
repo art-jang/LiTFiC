@@ -244,7 +244,7 @@ class Subtitles(Dataset):
 
         question = None
         if self.question_pool is not None:
-            if self.setname == "val":
+            if self.setname == "train":
                 question = random.choice(self.question_pool)
             else:
                 question = self.question_pool[0]

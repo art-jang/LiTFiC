@@ -106,7 +106,6 @@ class LanguageDecoder(nn.Module):
                          else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
             
         max_len = 0
-        labels = []
         inputs_embeds = []
         for i in range(x.shape[0]):
             cur_v_embed = x[i, :int(video_masks[i].sum())].to(device) # [num_v_tokens, C]
@@ -126,6 +125,8 @@ class LanguageDecoder(nn.Module):
 
             if len(cur_embed) > max_len:
                 max_len = len(cur_embed)
+        
+     
 
         pad_embed = self.decoder.model.embed_tokens(torch.LongTensor([self.tokenizer.pad_token_id]).to(device))
         attn_masks = []
@@ -142,6 +143,7 @@ class LanguageDecoder(nn.Module):
 
         inputs_embeds = torch.stack(inputs_embeds, dim=0).to(device, dtype=next(self.decoder.parameters()).dtype)
         attn_masks = torch.cat(attn_masks, dim=0).to(device, dtype=next(self.decoder.parameters()).dtype)
+
         return inputs_embeds, attn_masks
 
     def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None):
@@ -152,6 +154,6 @@ class LanguageDecoder(nn.Module):
     
     def predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None):
         inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device)
-        outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks)
+        outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50)
         
         return outputs

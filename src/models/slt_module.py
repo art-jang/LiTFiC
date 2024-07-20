@@ -234,6 +234,7 @@ class SLTLitModule(LightningModule):
         self.predict = True
         for batch_idx, batch in enumerate(self.trainer.datamodule.eval_dataloader()):
             self.eval_step(batch, batch_idx)
+            
         self.predict = False
 
         self.eval_epoch_end()
@@ -243,7 +244,7 @@ class SLTLitModule(LightningModule):
 
             if self.global_rank == 0:
                 hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
-                references = {'image'+str(i): [self.all_gt[i]] for i in range(len(self.all_gt))}
+                references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
 
                 _, rouge_scores  = self.rouge.compute_score(references, hypotheses)
 
@@ -257,7 +258,7 @@ class SLTLitModule(LightningModule):
                     tmp_dict['rouge'] = rouge_scores[idx]
                     tmp_dict['start'] = self.starts[idx]
                     tmp_dict['end'] = self.ends[idx]
-                    tmp_dict['gt'] = self.all_gt[idx]
+                    tmp_dict['gt'] = self.all_gts[idx]
                     tmp_dict['pred'] = self.all_preds[idx]
                     tmp_dict['pls'] = self.pls[idx]
                     vis_list.append(tmp_dict)
@@ -267,13 +268,13 @@ class SLTLitModule(LightningModule):
                     json.dump(vis_list, f)
         
             tensor_preds = strings_to_tensor(self.all_preds)
-            tensor_gt = strings_to_tensor(self.all_gt)
+            tensor_gt = strings_to_tensor(self.all_gts)
 
             m_preds_tensor = self.all_gather(tensor_preds)
             m_gt_tensor = self.all_gather(tensor_gt)
 
             self.all_preds = tensor_to_strings(m_preds_tensor.view(-1, 1024))
-            self.all_gt = tensor_to_strings(m_gt_tensor.view(-1, 1024))
+            self.all_gts = tensor_to_strings(m_gt_tensor.view(-1, 1024))
 
             hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
             references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
