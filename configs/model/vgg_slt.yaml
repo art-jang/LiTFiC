@@ -31,12 +31,16 @@ net:
     hidden_size: 3072
     projector_type: mlp2x_gelu
     pooling_config:
-      adaptive_pool: True
-      early_fusion: True
+      adaptive_pool: False
+      early_fusion: False
       nhead: 8
       activation: gelu
       batch_first: True
       depth: 2
+    cslr2_options:
+      use: True
+      ckpt_path: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
+      freeze: True
   llm_config:
     pretrained_llm: ${paths.llm_root}
     gradient_checkpointing_enable: True
@@ -49,7 +53,46 @@ net:
     decoder_config:
       trust_remote_code: True
       attn_implementation: flash_attention_2
+  cslr2_config:
+      _target_: src.models.components.vgg_slt_modules.cslr.cslr2.CSLR2
+      video_encoder:
+        _target_: src.models.components.vgg_slt_modules.cslr.transformer_encoder.make_model
+        vocab: 8697
+        N: 6
+        d_model: 768
+        h: 8
+        dropout: 0.1
+        contrastive: True
+      text_encoder:
+        _target_: src.models.components.vgg_slt_modules.cslr.t5.make_sentence_model
+        model_name: t5-large
+        root_path: ${paths.lm_root}
+      video_sequence_ll:
+        _target_: torch.nn.Linear
+        in_features: ${model.net.cslr2_config.video_encoder.d_model}
+        out_features: 256
+      video_token_ll:
+        _target_: torch.nn.Linear
+        in_features: ${model.net.cslr2_config.video_encoder.d_model}
+        out_features: ${model.net.cslr2_config.video_sequence_ll.out_features}
+      text_sentence_ll:
+        _target_: torch.nn.Linear
+        in_features: 1024  # size of text encoder embds
+        out_features: ${model.net.cslr2_config.video_sequence_ll.out_features}
+      text_word_ll:
+        _target_: torch.nn.Linear
+        in_features: ${model.net.cslr2_config.text_sentence_ll.in_features}
+        out_features: ${model.net.cslr2_config.video_sequence_ll.out_features}
+      pooling: max
+      sign_ret: True
+      no_video_encoder: False
+      same_text_ll: False
+      same_video_ll: False
+      avg_baseline: True
+    
 
 # compile model for faster training with pytorch 2.0
 compile: false
+frames_path: ${paths.rgb_frames}
+output_dir: ${paths.output_dir}
 

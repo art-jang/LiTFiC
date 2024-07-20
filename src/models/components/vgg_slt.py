@@ -14,6 +14,7 @@ class VggSLTNet(nn.Module):
         visual_encoder_config: dict,
         mm_projector_config: dict,
         llm_config: dict,
+        cslr2_config: dict,
         load_features: bool = False,
         precision: bool = "float32",
     ) -> None:
@@ -28,10 +29,11 @@ class VggSLTNet(nn.Module):
         super().__init__()
         self.load_features = load_features
         # self.visual_encoder = VisualEncoder(**visual_encoder_config, load_features=load_features, precision=precision)
-        self.mm_projector = MMProjector(**mm_projector_config)
+        self.mm_projector = MMProjector(cslr2_config, **mm_projector_config)
         self.language_decoder = LanguageDecoder(**llm_config, precision=precision)
 
-    def forward(self, batch: dict) -> torch.Tensor:
+
+    def forward(self, batch: dict, predict = False) -> torch.Tensor:
         if self.load_features:
             x = batch["features"]
         masks = batch["attn_masks"]
@@ -39,8 +41,17 @@ class VggSLTNet(nn.Module):
         questions = batch["questions"] if batch["questions"][0] is not None else None
         previous_contexts = batch["previous_contexts"] if batch["previous_contexts"][0] is not None else None
 
+        target_indices = batch["target_indices"]
+        target_labels = batch["target_labels"]
+
+
         # x = self.visual_encoder(x, masks)        
-        x, masks = self.mm_projector(x, masks=masks)
+        x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
+
+        if predict:
+            outputs = self.language_decoder.predict(x, video_masks=masks, subtitles=subtitles, questions=questions, previous_contexts=previous_contexts)
+            return outputs, subtitles
+    
         outputs, labels = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,

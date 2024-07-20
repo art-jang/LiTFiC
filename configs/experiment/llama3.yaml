@@ -20,14 +20,14 @@ trainer:
   min_epochs: 10
   max_epochs: 10
   gradient_clip_val: 1.0
-  devices: [4]
+  devices: [0]
 
 data:
   batch_size: 2
-  num_workers: 16
+  num_workers: 8
 
 paths:
-  llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B-Instruct
+  llm_root: ../hf/Meta-Llama-3-8B
 
 model:
   net:

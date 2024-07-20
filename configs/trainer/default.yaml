@@ -12,7 +12,7 @@ gradient_clip_val: 1
 accumulate_grad_batches: 1
 
 # mixed precision for extra speed-up
-precision: bf16-mixed #32-true #bf16-mixed
+precision: bf16-mixed # 32-true # bf16-mixed  #bf16-mixed
 
 # perform a validation loop every N training epochs
 check_val_every_n_epoch: 1

@@ -1,16 +1,36 @@
 import re
 import torch
 import torch.nn as nn
+import hydra
+
+import ipdb
+
+from src.utils.cslr_tools import load_checkpoint_model
+from omegaconf import OmegaConf
 
 class MMProjector(nn.Module):
     def __init__(self,
+                 cslr2_config,
                  projector_type,
                  mm_hidden_size,
                  hidden_size,
                  pooling_config,
+                 cslr2_options,
                  **kwargs):
         super(MMProjector, self).__init__()
         self.projector_type = projector_type
+
+        self.use_cslr2 = cslr2_options.use
+
+        if self.use_cslr2:
+            self.cslr2 = cslr2_config
+
+        if cslr2_options.ckpt_path is not None:
+            self.cslr2 = load_checkpoint_model(cslr2_options.ckpt_path, self.cslr2, torch.device('cuda'))
+        
+        if cslr2_options.freeze:
+            for name, param in self.cslr2.named_parameters():
+                param.requires_grad = False
 
         # mapping network
         mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
@@ -91,7 +111,9 @@ class MMProjector(nn.Module):
             
         return pooled_x, new_masks
 
-    def forward(self, x, masks=None):
+    def forward(self, x, masks=None, target_indices = None, target_labels = None):
+        if self.use_cslr2:
+            x, masks = self.cslr2(x, masks, target_indices, target_labels)
         if self.early_fusion:
             x, masks = self._pool(x, masks)
             x = self.projector(x)

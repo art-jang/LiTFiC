@@ -446,6 +446,11 @@ def collate_fn_padd_t(batch: List):
     questions = [item["question"] for item in batch]
     previous_contexts = [item["previous_context"] for item in batch]
     pls = [item["pls"] for item in batch]
+    target_indices = [item["target_indices"] for item in batch]
+    target_labels = [item["target_labels"] for item in batch]
+    start = [item["sub_start"] for item in batch]
+    end = [item["sub_end"] for item in batch]
+    video_names = [item["video_name"] for item in batch]
 
     padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
 
@@ -455,7 +460,12 @@ def collate_fn_padd_t(batch: List):
         "subtitles": subtitles,
         "questions": questions,
         "previous_contexts": previous_contexts,
-        "pls": pls
+        "pls": pls,
+        "target_indices": target_indices,
+        "target_labels": target_labels,
+        "start": start,
+        "end": end,
+        "video_names": video_names
     }
 
 

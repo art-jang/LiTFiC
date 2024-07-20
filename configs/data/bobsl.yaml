@@ -4,6 +4,7 @@ num_workers: 0
 pin_memory: True
 collate_fn: src.data.components.sentence.collate_fn_padd_t
 dataset: bobsl
+eval_data_size: 832
 dataset_config:
   # general parameters to load sentences associated to subtitles
   subset2episode: ${paths.subset2episode}
@@ -13,8 +14,9 @@ dataset_config:
   subtitles_min_duration: 2.0
   temporal_pad: 1.0
   info_pkl: ${paths.info_pkl}
-  max_previous_sentences: 3
-  question_pool: ${paths.question_pool}
+  max_previous_sentences: 0
+  # question_pool: ${paths.question_pool}
+  question_pool: null
   filter_stop_words: False
   subtitles_random_offset: 0.5
   fps: 25
@@ -30,14 +32,14 @@ dataset_config:
   video_augmentations: null
 
   # parameters to load video pseudo-labels
-  load_pl: False
+  load_pl: True
   pl_lmdb: ${paths.annotations_pkl}
   pl_load_stride: 1
   pl_load_float16: False
   pl_lmdb_window_size: 16
   pl_lmdb_stride: 2
-  pl_filter: 0.6
-  pl_min_count: 6
+  pl_filter: 0.0
+  pl_min_count: 1
   pl_synonym_grouping: True
   synonyms_pkl: ${paths.synonyms_pkl}
   vocab_pkl: ${paths.vocab_pkl}
