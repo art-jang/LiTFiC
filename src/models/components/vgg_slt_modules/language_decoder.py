@@ -60,7 +60,7 @@ class LanguageDecoder(nn.Module):
             input_ids = torch.cat([input_ids, torch.LongTensor([self.tokenizer.eos_token_id]).to(device)], dim=0)
         return input_ids
     
-    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None,  sub_gt=None):
+    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None):
         if previous_contexts is not None:
             questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
                          else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
@@ -76,7 +76,7 @@ class LanguageDecoder(nn.Module):
         
         if self.oracle and previous_contexts is not None:
             questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' + ", ".join(list(set(pl))) + ". The sentence is: " for q, pl, c in zip(questions, pls, previous_contexts)]
-
+        
         if self.oracle:
             questions = [q + 'And the word list is as follows: ' + " ".join(list(set(pl))) + "\nGenerated Sentence: " for q, pl in zip(questions, pls)]
 
@@ -147,7 +147,7 @@ class LanguageDecoder(nn.Module):
         
         if self.oracle and previous_contexts is not None:
             questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' + ", ".join(list(set(pl))) + ". The sentence is: " for q, pl, c in zip(questions, pls, previous_contexts)]
-
+        
         if self.oracle:
             questions = [q + 'And the word list is as follows: ' + " ".join(list(set(pl))) + "\nGenerated Sentence: " for q, pl in zip(questions, pls)]
 
@@ -191,17 +191,18 @@ class LanguageDecoder(nn.Module):
         return inputs_embeds, attn_masks
 
     def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks, labels = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls)
+        inputs_embeds, attn_masks, labels = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, return_dict=True)
         if not self.training:
-            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls)
+            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt)
         else:
             gen_sentences = None
             
         return outputs, labels, gen_sentences
     
     def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls)
+        inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id)
         
         return outputs
+    
