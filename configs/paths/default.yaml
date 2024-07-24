@@ -17,18 +17,18 @@ output_dir: ${hydra:runtime.output_dir}
 # path to working directory
 work_dir: ${hydra:runtime.cwd}
 
-subset2episode: ../cslr2_t/bobsl/splits/subset2episode.json
-vocab_pkl: ../cslr2_t/bobsl/vocab/8697_vocab.pkl
-info_pkl: ../cslr2_t/bobsl/unannotated-info/info-src_videos_2236.pkl
-annotations_pkl: ../cslr2_t/bobsl/lmdbs/lmdb-pl_vswin_t-bs256_float16/
-vid_features_lmdb: ../cslr2_t/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
-word_embds_pkl: ../cslr2_t/bobsl/vocab_embds/t5-large_8k_word_embeddings.pkl
-subtitles_path: ../cslr2_t/bobsl/subtitles_pkl/best_delta_postpro_bobsl_best_traineval_0_pslab_ftune_.pkl
-aligned_subtitles_path: ../cslr2_t/bobsl/subtitles_pkl/manually_aligned.pkl
-synonyms_pkl: ../cslr2_t/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
-rgb_frames: ../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
-misaligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
-heuristic_aligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
+subset2episode: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/splits/subset2episode.json
+vocab_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab/8697_vocab.pkl
+info_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/unannotated-info/info-src_videos_2236.pkl
+annotations_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-pl_vswin_t-bs256_float16/
+vid_features_lmdb: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
+word_embds_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab_embds/t5-large_8k_word_embeddings.pkl
+subtitles_path: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/subtitles_pkl/best_delta_postpro_bobsl_best_traineval_0_pslab_ftune_.pkl
+aligned_subtitles_path: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/subtitles_pkl/manually_aligned.pkl
+synonyms_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
+rgb_frames: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
+misaligned_csv_root: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
+heuristic_aligned_csv_root: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
 llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
-lm_root: ../cslr2_t/t5_checkpoint/
+lm_root: ../cslr2/t5_checkpoint/
 question_pool: ./data/question_pool.txt

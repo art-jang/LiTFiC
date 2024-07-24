@@ -22,17 +22,12 @@ class SLTDataModule(LightningDataModule):
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
-        self.data_eval: Optional[Dataset] = None
-        self.data_predict: Optional[Dataset] = None
 
         self.batch_size_per_device = batch_size
+        self.eval_data_size = eval_data_size
 
     def setup(self, stage: Optional[str] = None) -> None:
         if self.trainer is not None:
-            # if self.hparams.batch_size % self.trainer.world_size != 0:
-            #     raise RuntimeError(
-            #         f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
-            #     )
             self.batch_size_per_device = self.hparams.batch_size
 
         # load and split datasets only if not loaded already
@@ -41,12 +36,10 @@ class SLTDataModule(LightningDataModule):
                 from ..data.components.sentence import Sentences
                 self.data_train = Sentences(**self.hparams.dataset_config, setname="train")
                 self.data_val = Sentences(**self.hparams.dataset_config, setname="val")
-                self.data_eval = Subset(
-                                    self.data_val,
-                                    torch.randperm(
-                                        len(self.data_val)
-                                    )[:self.hparams.eval_data_size],
-                                )
+                self.data_test = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
+                len(self.data_val))[:self.eval_data_size])
+                self.data_val = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
+                len(self.data_val))[:self.eval_data_size])
 
         if self.hparams.collate_fn is not None:
             from importlib import import_module
@@ -78,34 +71,6 @@ class SLTDataModule(LightningDataModule):
         """Create and return the validation dataloader.
 
         :return: The validation dataloader.
-        """
-        return DataLoader(
-            dataset=self.data_val,
-            batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=False,
-            collate_fn=self.collate_fn,
-        )
-
-    def eval_dataloader(self) -> DataLoader[Any]:
-        """Create and return the evaluation dataloader.
-
-        :return: The evaluation dataloader.
-        """
-        return DataLoader(
-            dataset=self.data_eval,
-            batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=False,
-            collate_fn=self.collate_fn,
-        )
-    
-    def predict_dataloader(self) -> DataLoader[Any]:
-        """Create and return the prediction dataloader.
-
-        :return: The prediction dataloader.
         """
         return DataLoader(
             dataset=self.data_val,
@@ -156,4 +121,4 @@ class SLTDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTDataModule()
+    _ = SLTDataModule()

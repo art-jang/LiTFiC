@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
+from src.utils.data_utils import sample_sub
 
 class Sentences(Dataset):
     """General dataset class to load sentences from data files"""
@@ -378,6 +379,7 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
+            "sub_gt": sample_sub(subtitle),
         }
 
         '''
@@ -451,6 +453,7 @@ def collate_fn_padd_t(batch: List):
     start = [item["sub_start"] for item in batch]
     end = [item["sub_end"] for item in batch]
     video_names = [item["video_name"] for item in batch]
+    sub_gt = [item["sub_gt"] for item in batch]
 
     padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
 
@@ -465,7 +468,8 @@ def collate_fn_padd_t(batch: List):
         "target_labels": target_labels,
         "start": start,
         "end": end,
-        "video_names": video_names
+        "video_names": video_names,
+        "sub_gt": sub_gt
     }
 
 

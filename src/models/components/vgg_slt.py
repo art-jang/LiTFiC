@@ -44,23 +44,20 @@ class VggSLTNet(nn.Module):
         target_indices = batch["target_indices"]
         target_labels = batch["target_labels"]
         pls = batch["pls"]
-
+        sub_gt = batch["sub_gt"]
 
         # x = self.visual_encoder(x, masks)        
         x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
-
-        if predict:
-            outputs = self.language_decoder.predict(x, video_masks=masks, subtitles=subtitles, questions=questions, previous_contexts=previous_contexts, pls=pls)
-            return outputs, subtitles
     
-        outputs, labels = self.language_decoder(x, 
+        outputs, labels, gen_sentences = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,
                                                 questions=questions, 
                                                 previous_contexts=previous_contexts,
-                                                pls=pls)
+                                                pls=pls,
+                                                sub_gt=sub_gt)
 
-        return outputs, labels
+        return outputs, labels, gen_sentences
 
 
 if __name__ == "__main__":

@@ -46,6 +46,14 @@ net:
     gradient_checkpointing_enable: True
     freeze_decoder: True
     oracle: True
+    lora: True
+    sub_sub: False
+    lora_config:
+      target_modules: ['q_proj', 'v_proj']
+      lora_alpha: 16
+      lora_dropout: 0.05
+      r: 4
+      bias: none
     tokenizer_config:
       padding_side: left
       trust_remote_code: True
@@ -90,7 +98,6 @@ net:
       same_text_ll: False
       same_video_ll: False
       avg_baseline: True
-    
 
 # compile model for faster training with pytorch 2.0
 compile: false

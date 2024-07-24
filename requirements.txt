@@ -33,4 +33,8 @@ pycocoevalcap==1.2
 numpy==1.26.1
 tensorboard==2.17.0
 sentencepiece==0.2.0
+ipdb
+opencv-python==4.10.0.84
+wandb
+peft
 # sh            # for running bash commands in some tests (linux/macos only)
