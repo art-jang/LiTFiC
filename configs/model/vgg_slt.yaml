@@ -45,6 +45,7 @@ net:
     pretrained_llm: ${paths.llm_root}
     gradient_checkpointing_enable: True
     freeze_decoder: True
+    oracle: True
     tokenizer_config:
       padding_side: left
       trust_remote_code: True

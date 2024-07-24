@@ -14,6 +14,7 @@ from numpy import ndarray
 from omegaconf import DictConfig
 from torch import Tensor
 from tqdm import tqdm
+from torchvision.io import decode_image, write_video
 
 def lmdb_key_list(episode_name: str, begin_frame: int, end_frame: int) -> List:
     """
@@ -61,29 +62,18 @@ def save_video(name, start, end, output_path, rgb_lmdb_env, fps=25):
             begin_frame=int(start * 25),
             end_frame=int(end * 25),
         )
+    
+    
     frames = get_rgb_frames(lmdb_keys, rgb_lmdb_env)
 
-    fig = plt.figure()
-    ax1 = fig.add_subplot(1, 1, 1)
+
+    frames = torch.tensor(np.array(frames), dtype=torch.uint8)
     
-    # Frame display settings
-    ax1.set_xlim(0, frames[0].shape[1])
-    ax1.set_ylim(0, frames[0].shape[0])
-    ax1.tick_params(axis="both", which="both", bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
+
+    write_video(
+            filename=output_path,
+            video_array=frames,
+            fps=25,
+        )
+
     
-    animated_frames = []
-    for frame in frames:
-        animated_frame = []
-        animated_frame.append(ax1.imshow(np.flipud(frame), animated=True, interpolation="nearest"))
-        animated_frames.append(animated_frame)
-    
-    fig.tight_layout()
-    anim = ArtistAnimation(fig, animated_frames, 
-            interval=50,
-            blit=True,
-            repeat=False)
-    
-    # Save the video locally
-    writer = FFMpegWriter(fps=fps)
-    anim.save(output_path, writer=writer)
-    plt.close(fig)

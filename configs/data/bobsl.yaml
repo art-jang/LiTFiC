@@ -15,8 +15,8 @@ dataset_config:
   temporal_pad: 1.0
   info_pkl: ${paths.info_pkl}
   max_previous_sentences: 0
-  # question_pool: ${paths.question_pool}
-  question_pool: null
+  question_pool: ${paths.question_pool}
+  # question_pool: null
   filter_stop_words: False
   subtitles_random_offset: 0.5
   fps: 25

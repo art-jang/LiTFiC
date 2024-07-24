@@ -103,13 +103,16 @@ class SLTLitModule(LightningModule):
 
         self.rgb_lmdb_env = None
 
-        if self.global_rank == 0:
-            self.rgb_lmdb_env = lmdb.open(
-                frames_path, readonly=True, lock=False, max_readers=512
-            )
+        # if self.global_rank == 0:
+        #     self.rgb_lmdb_env = lmdb.open(
+        #         frames_path, readonly=True, lock=False, max_readers=512
+        #     )
 
         self.vis_dir = f"{output_dir}/vis"
         os.makedirs(self.vis_dir, exist_ok=True)
+    
+    def predict_step(self, batch, batch_idx):
+        pass
         
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -240,8 +243,6 @@ class SLTLitModule(LightningModule):
         self.eval_epoch_end()
     
     def eval_epoch_end(self):
-        if self.global_step > 0:
-
             if self.global_rank == 0:
                 hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
                 references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
@@ -262,7 +263,9 @@ class SLTLitModule(LightningModule):
                     tmp_dict['pred'] = self.all_preds[idx]
                     tmp_dict['pls'] = self.pls[idx]
                     vis_list.append(tmp_dict)
-                    save_video(self.names[idx], self.starts[idx], self.ends[idx], f"{self.vis_dir}/{self.current_epoch}/{idx}.mp4", self.rgb_lmdb_env)
+                    
+                    if self.rgb_lmdb_env is not None:
+                        save_video(self.names[idx], self.starts[idx], self.ends[idx], f"{self.vis_dir}/{self.current_epoch}/{idx}.mp4", self.rgb_lmdb_env)
                 
                 with open(f'{self.vis_dir}/{self.current_epoch}/info.json', 'w') as f:
                     json.dump(vis_list, f)
@@ -294,6 +297,9 @@ class SLTLitModule(LightningModule):
             self.ends = []
             self.names = []
 
+
+    def on_predict_start(self):
+        self.eval()
 
     def setup(self, stage: str) -> None:
         """Lightning hook that is called at the beginning of fit (train + validate), validate,
