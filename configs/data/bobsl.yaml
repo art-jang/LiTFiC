@@ -11,12 +11,12 @@ dataset_config:
   subtitles_path: ${paths.subtitles_path}
   subtitles_temporal_shift: 0.0
   subtitles_max_duration: 20.0
-  subtitles_min_duration: 2.0
+  subtitles_min_duration: 1.0
   temporal_pad: 1.0
   info_pkl: ${paths.info_pkl}
-  max_previous_sentences: 0
-  # question_pool: ${paths.question_pool}
-  question_pool: null
+  max_previous_sentences: 3
+  question_pool: ${paths.question_pool}
+  # question_pool: null
   filter_stop_words: False
   subtitles_random_offset: 0.5
   fps: 25

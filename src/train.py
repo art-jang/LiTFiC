@@ -67,8 +67,8 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
 
-    cfg.trainer.devices = int(os.environ['SLURM_GPUS_ON_NODE'])
-    cfg.trainer.num_nodes = int(os.environ['SLURM_NNODES'])
+    # cfg.trainer.devices = int(os.environ['SLURM_GPUS_ON_NODE'])
+    # cfg.trainer.num_nodes = int(os.environ['SLURM_NNODES'])
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
     trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)

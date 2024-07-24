@@ -26,7 +26,7 @@ class MMProjector(nn.Module):
             self.cslr2 = cslr2_config
 
         if cslr2_options.ckpt_path is not None:
-            self.cslr2 = load_checkpoint_model(cslr2_options.ckpt_path, self.cslr2, torch.device('cuda'))
+            self.cslr2 = load_checkpoint_model(cslr2_options.ckpt_path, self.cslr2, 'cpu')
         
         if cslr2_options.freeze:
             for name, param in self.cslr2.named_parameters():

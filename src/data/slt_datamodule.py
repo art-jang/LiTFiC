@@ -1,7 +1,6 @@
 from typing import Any, Dict, Optional, Callable
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset, Subset
-import torch
 
 
 class SLTDataModule(LightningDataModule):
@@ -22,7 +21,6 @@ class SLTDataModule(LightningDataModule):
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
-        self.data_eval: Optional[Dataset] = None
 
         self.batch_size_per_device = batch_size
 
@@ -40,12 +38,7 @@ class SLTDataModule(LightningDataModule):
                 from ..data.components.sentence import Sentences
                 self.data_train = Sentences(**self.hparams.dataset_config, setname="train")
                 self.data_val = Sentences(**self.hparams.dataset_config, setname="val")
-                self.data_eval = Subset(
-                                    self.data_val,
-                                    torch.randperm(
-                                        len(self.data_val)
-                                    )[:self.hparams.eval_data_size],
-                                )
+                self.data_test = Sentences(**self.hparams.dataset_config, setname="val")
 
         if self.hparams.collate_fn is not None:
             from importlib import import_module
@@ -80,20 +73,6 @@ class SLTDataModule(LightningDataModule):
         """
         return DataLoader(
             dataset=self.data_val,
-            batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=False,
-            collate_fn=self.collate_fn,
-        )
-
-    def eval_dataloader(self) -> DataLoader[Any]:
-        """Create and return the evaluation dataloader.
-
-        :return: The evaluation dataloader.
-        """
-        return DataLoader(
-            dataset=self.data_eval,
             batch_size=self.batch_size_per_device,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
@@ -141,4 +120,4 @@ class SLTDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTDataModule()
+    _ = SLTDataModule()

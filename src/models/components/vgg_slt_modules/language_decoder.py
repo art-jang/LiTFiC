@@ -54,8 +54,6 @@ class LanguageDecoder(nn.Module):
         inputs_embeds = []
         for i in range(x.shape[0]):
             cur_v_embed = x[i, :int(video_masks[i].sum())].to(device) # [num_v_tokens, C]
-
-            
             cur_s = self._tokenize(subtitles[i], device=device)[1:] # remove bos token
             
             if questions is not None:
@@ -67,7 +65,6 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
                 cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
-            
             else:
                 # add bos token embedding to the seqymces and the bos token to the labels
                 cur_v_embed = torch.cat([self.decoder.model.embed_tokens(torch.LongTensor([self.tokenizer.bos_token_id]).to(device)), cur_v_embed], dim=0)
@@ -113,10 +110,8 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.decoder.model.embed_tokens(cur_q)
-
             if questions is not None:
-                cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
-            
+                cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]            
             else:
                 cur_v_embed = torch.cat([self.decoder.model.embed_tokens(torch.LongTensor([self.tokenizer.bos_token_id]).to(device)), cur_v_embed], dim=0)
                 cur_embed = cur_v_embed
@@ -125,8 +120,6 @@ class LanguageDecoder(nn.Module):
 
             if len(cur_embed) > max_len:
                 max_len = len(cur_embed)
-        
-     
 
         pad_embed = self.decoder.model.embed_tokens(torch.LongTensor([self.tokenizer.pad_token_id]).to(device))
         attn_masks = []
@@ -139,7 +132,6 @@ class LanguageDecoder(nn.Module):
                 attn_mask = torch.cat([torch.ones(1, len(inputs_embeds[i])), torch.zeros(1, padded_len)], dim=1).to(device)
                 inputs_embeds[i] = torch.cat([inputs_embeds[i], pad_embed.repeat(padded_len, 1)], dim=0)
             attn_masks.append(attn_mask)
-        
 
         inputs_embeds = torch.stack(inputs_embeds, dim=0).to(device, dtype=next(self.decoder.parameters()).dtype)
         attn_masks = torch.cat(attn_masks, dim=0).to(device, dtype=next(self.decoder.parameters()).dtype)
@@ -149,11 +141,15 @@ class LanguageDecoder(nn.Module):
     def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None):
         inputs_embeds, attn_masks, labels = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, return_dict=True)
-        
-        return outputs, labels
+        if not self.training:
+            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts)
+        else:
+            gen_sentences = None
+            
+        return outputs, labels, gen_sentences
     
-    def predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None):
+    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None):
         inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device)
-        outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50)
+        outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id)
         
         return outputs

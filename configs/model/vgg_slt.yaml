@@ -39,7 +39,7 @@ net:
       depth: 2
     cslr2_options:
       use: True
-      ckpt_path: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
+      ckpt_path: ../cslr2/model_best.pth
       freeze: True
   llm_config:
     pretrained_llm: ${paths.llm_root}
@@ -89,7 +89,6 @@ net:
       same_text_ll: False
       same_video_ll: False
       avg_baseline: True
-    
 
 # compile model for faster training with pytorch 2.0
 compile: false

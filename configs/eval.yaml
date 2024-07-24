@@ -2,17 +2,20 @@
 
 defaults:
   - _self_
-  - data: mnist # choose datamodule with `test_dataloader()` for evaluation
-  - model: mnist
-  - logger: null
+  - data: bobsl # choose datamodule with `test_dataloader()` for evaluation
+  - model: vgg_slt
+  - callbacks: default
+  - logger: wandb
   - trainer: default
   - paths: default
   - extras: default
   - hydra: default
+  - experiment: null
 
 task_name: "eval"
 
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: ???
+ckpt_path: null
+oracle_test: True
