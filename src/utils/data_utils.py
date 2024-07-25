@@ -24,7 +24,7 @@ def sample_sub(sentence):
                 'herself', 'has', 'just', 'where', 'too', 'only', 'myself', 'which', 'those',
                 'i', 'after', 'few', 'whom', 't', 'being', 'if', 'theirs', 'my', 'against', 'a',
                 'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
-            } 
+            }
     filtered_words = [word for word in words if word not in stop_words]
     
     if len(filtered_words) == 0:
