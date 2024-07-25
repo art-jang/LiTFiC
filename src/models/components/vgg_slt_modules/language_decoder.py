@@ -191,17 +191,17 @@ class LanguageDecoder(nn.Module):
         return inputs_embeds, attn_masks
 
     def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks, labels = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls)
+        inputs_embeds, attn_masks, labels = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, return_dict=True)
         if not self.training:
-            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls)
+            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt)
         else:
             gen_sentences = None
             
         return outputs, labels, gen_sentences
     
     def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls)
+        inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id)
         
         return outputs

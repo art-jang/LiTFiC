@@ -4,6 +4,7 @@ from torch import nn
 from src.models.components.vgg_slt_modules.visual_encoder import VisualEncoder
 from src.models.components.vgg_slt_modules.mm_projector import MMProjector
 from src.models.components.vgg_slt_modules.language_decoder import LanguageDecoder
+import ipdb
 
 
 class VggSLTNet(nn.Module):

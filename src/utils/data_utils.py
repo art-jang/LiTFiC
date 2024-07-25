@@ -1,9 +1,13 @@
 import random
 import math
+import ipdb
+import string
 
 
 def sample_sub(sentence):
     words = sentence.split()
+
+    words = [word.strip(string.punctuation).lower() for word in words]
     # Remove stop words
     stop_words = {
                 'ourselves', 'hers', 'between', 'yourself', 'but', 'again',

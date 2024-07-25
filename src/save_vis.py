@@ -39,7 +39,7 @@ def process_json_files(parent_folder):
 
 # Example usage
 
-parent_folder = 'logs/llama_nq/runs/2024-07-22_21-33-07/vis/'
+parent_folder = 'logs/sub/'
 rgb_lmdb_env = lmdb.open(
                 "../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/", readonly=True, lock=False, max_readers=512
             )
