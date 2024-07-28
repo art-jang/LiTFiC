@@ -35,6 +35,6 @@ model:
       hidden_size: 4096
     llm_config:
       tokenizer_config:
-        padding_side: right
+        padding_side: left
         use_fast: True
 

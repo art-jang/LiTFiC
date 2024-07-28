@@ -57,7 +57,6 @@ class VggSLTNet(nn.Module):
                                                 previous_contexts=previous_contexts,
                                                 pls=pls,
                                                 sub_gt=sub_gt)
-
         return outputs, labels, gen_sentences
 
 

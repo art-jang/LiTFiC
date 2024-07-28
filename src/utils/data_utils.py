@@ -29,11 +29,11 @@ def sample_sub(sentence):
     
     if len(filtered_words) == 0:
         # If there are only stop words, use the original sentence
-        num_words_to_keep = math.ceil(len(words) * 0.5)
+        num_words_to_keep = math.ceil(len(words) * 1)
         selected_words = random.sample(words, num_words_to_keep)
     else:
         # Calculate 30% of the remaining words, rounding up
-        num_words_to_keep = math.ceil(len(filtered_words) * 0.5)
+        num_words_to_keep = math.ceil(len(filtered_words) * 1)
         selected_words = random.sample(filtered_words, num_words_to_keep)
     
     return selected_words

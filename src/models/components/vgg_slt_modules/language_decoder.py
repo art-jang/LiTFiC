@@ -128,8 +128,14 @@ class LanguageDecoder(nn.Module):
         inputs_embeds = torch.stack(inputs_embeds, dim=0)
         attn_masks = torch.cat(attn_masks, dim=0)
         labels = torch.stack(labels, dim=0)
+        position_ids = None
+        if self.tokenizer.padding_side == "left":
+            position_ids = attn_masks.cumsum(-1)-1
+            position_ids.masked_fill_(attn_masks == 0, 1)
+            position_ids = position_ids.to(device)
+            position_ids = position_ids[:, :-1]
 
-        return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:]
+        return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
     def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None):
         if previous_contexts is not None:
@@ -187,12 +193,17 @@ class LanguageDecoder(nn.Module):
 
         inputs_embeds = torch.stack(inputs_embeds, dim=0).to(device, dtype=next(self.decoder.parameters()).dtype)
         attn_masks = torch.cat(attn_masks, dim=0).to(device, dtype=next(self.decoder.parameters()).dtype)
+        position_ids = None
+        if self.tokenizer.padding_side == "left":
+            position_ids = attn_masks.cumsum(-1)-1
+            position_ids.masked_fill_(attn_masks == 0, 1)
+            position_ids = position_ids.to(device)
 
-        return inputs_embeds, attn_masks
+        return inputs_embeds, attn_masks, position_ids
 
     def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks, labels = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
-        outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, return_dict=True)
+        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
+        outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training:
             gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt)
         else:
@@ -201,7 +212,7 @@ class LanguageDecoder(nn.Module):
         return outputs, labels, gen_sentences
     
     def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
+        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id)
         
         return outputs
