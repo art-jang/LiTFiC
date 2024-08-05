@@ -230,10 +230,10 @@ class Subtitles(Dataset):
         previous_context = None
         if self.max_previous_sentences > 0:
             previous_context = ""
-            if self.setname == "train":
-                num_sentences = random.randint(0, self.max_previous_sentences)
-            else:
-                num_sentences = self.max_previous_sentences
+            # if self.setname == "train":
+            #     num_sentences = random.randint(0, self.max_previous_sentences)
+            # else:
+            num_sentences = self.max_previous_sentences
             for i in range(num_sentences):
                 if idx - i - 1 < 0:
                     break

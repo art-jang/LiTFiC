@@ -50,3 +50,4 @@ dataset_config:
 
   # other parameters
   verbose: False
+  sub_sample_shuffle: False 

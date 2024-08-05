@@ -19,6 +19,8 @@ import json
 
 from src.utils.gather_utils import strings_to_tensor, tensor_to_strings
 from src.utils.vis_utils import save_video
+from bleurt_pytorch import BleurtConfig, BleurtForSequenceClassification, BleurtTokenizer
+
 
 class SLTLitModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
@@ -62,6 +64,7 @@ class SLTLitModule(LightningModule):
         compile: bool,
         frames_path: str,
         output_dir: str,
+        bleurt_path: str,
     ) -> None:
         """Initialize a `MNISTLitModule`.
 
@@ -99,15 +102,34 @@ class SLTLitModule(LightningModule):
         self.ends = []
         self.names = []
         self.sub_gts = []
+        self.prev_context = []
+        self.blip_cap = []
 
         self.rgb_lmdb_env = None
 
         self.vis_dir = f"{output_dir}/vis"
         os.makedirs(self.vis_dir, exist_ok=True)
+
+        # bleurt metric
+        self.bleurt_model = BleurtForSequenceClassification.from_pretrained(bleurt_path)
+        self.bleurt_tokenizer = BleurtTokenizer.from_pretrained(bleurt_path)
     
     def predict_step(self, batch, batch_idx):
         pass
         
+    def get_bleurt_scores(self, references, candidates, batch_size = 16):
+        self.bleurt_model.eval()
+        with torch.no_grad():
+            results = []
+            
+            for idx in range(0, len(references), batch_size):
+                refs = references[idx:idx+batch_size]
+                cands = candidates[idx:idx+batch_size]
+                inputs = self.bleurt_tokenizer(refs, cands, padding='longest', return_tensors='pt')
+                res = self.bleurt_model(**inputs).logits.flatten().tolist()
+                results.extend(res)
+
+        return results
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -150,6 +172,8 @@ class SLTLitModule(LightningModule):
             self.ends.extend(batch['end'])
             self.names.extend(batch['video_names'])
             self.sub_gts.extend(batch['sub_gt'])
+            if batch['previous_contexts'] is not None:
+                self.prev_context.extend(batch['previous_contexts'])
 
         return loss, preds, labels
 
@@ -183,6 +207,8 @@ class SLTLitModule(LightningModule):
 
             _, rouge_scores  = self.rouge.compute_score(references, hypotheses)
 
+            bleurt_scores = self.get_bleurt_scores(self.all_gts, self.all_preds)
+
             vis_list = []
 
             os.makedirs(f"{self.vis_dir}/{self.current_epoch}", exist_ok=True)
@@ -197,6 +223,11 @@ class SLTLitModule(LightningModule):
                 tmp_dict['pred'] = self.all_preds[idx]
                 tmp_dict['pls'] = self.pls[idx]
                 tmp_dict['sub_gt'] = self.sub_gts[idx]
+                tmp_dict['bleurt'] = bleurt_scores[idx]
+
+                if len(self.prev_context) > 0:
+                    tmp_dict['prev_contexts'] = self.prev_context[idx] 
+                
                 vis_list.append(tmp_dict)
                 if self.rgb_lmdb_env is not None:
                     save_video(self.names[idx], self.starts[idx], self.ends[idx], f"{self.vis_dir}/{self.current_epoch}/{idx}.mp4", self.rgb_lmdb_env)
@@ -219,10 +250,12 @@ class SLTLitModule(LightningModule):
         bleu_score = self.bleu.compute_score(hypotheses, references)[0][3]
         rouge_score = self.rouge.compute_score(references, hypotheses)[0]
         cider_score = self.cider.compute_score(references, hypotheses)[0]
+        bleurt_score = sum(self.get_bleurt_scores(self.all_gts, self.all_preds))/len(self.all_gts)
 
         self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
         self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
         self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
 
         self.all_preds = []
         self.all_gts = []
@@ -230,6 +263,8 @@ class SLTLitModule(LightningModule):
         self.starts = []
         self.ends = []
         self.names = []
+        self.sub_gts = []
+        self.prev_context = []
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.

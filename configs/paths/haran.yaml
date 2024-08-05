@@ -31,4 +31,5 @@ misaligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_21.1
 heuristic_aligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
 llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
 lm_root: ../cslr2_t/t5_checkpoint/
+bleurt_path: ../hf/BLEURT-20
 question_pool: ./data/question_pool.txt

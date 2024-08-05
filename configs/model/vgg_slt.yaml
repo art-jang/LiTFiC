@@ -103,4 +103,5 @@ net:
 compile: false
 frames_path: ${paths.rgb_frames}
 output_dir: ${paths.output_dir}
+bleurt_path: ${paths.bleurt_path}
 

@@ -56,6 +56,7 @@ class Sentences(Dataset):
         load_word_embds: bool = False,
         word_embds_pkl: Optional[str] = None,
         verbose: bool = False,
+        sub_sample_shuffle: Optional[str] = True,
     ):
         """
         Args:
@@ -176,6 +177,8 @@ class Sentences(Dataset):
             msg = "word_embds_pkl must be provided if load_word_embds is True"
             assert word_embds_pkl is not None, msg
             self.word_embds = pickle.load(open(word_embds_pkl, "rb"))
+        
+        self.sub_sample_shuffle = sub_sample_shuffle
 
 
     def fix_synonyms_dict(self) -> None:
@@ -379,7 +382,7 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
-            "sub_gt": sample_sub(subtitle),
+            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle),
         }
 
         '''

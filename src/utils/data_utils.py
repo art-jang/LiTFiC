@@ -4,7 +4,7 @@ import ipdb
 import string
 
 
-def sample_sub(sentence):
+def sample_sub(sentence, shuffle):
     words = sentence.split()
 
     words = [word.strip(string.punctuation).lower() for word in words]
@@ -26,7 +26,12 @@ def sample_sub(sentence):
                 'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
             }
     filtered_words = [word for word in words if word not in stop_words]
-    
+
+    if not shuffle:
+        if len(filtered_words) == 0:
+            return words
+        return filtered_words
+            
     if len(filtered_words) == 0:
         # If there are only stop words, use the original sentence
         num_words_to_keep = math.ceil(len(words) * 1)
