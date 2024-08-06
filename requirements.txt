@@ -37,4 +37,5 @@ ipdb
 opencv-python==4.10.0.84
 wandb
 peft==0.12.0
+debugpy==1.8.5
 # sh            # for running bash commands in some tests (linux/macos only)

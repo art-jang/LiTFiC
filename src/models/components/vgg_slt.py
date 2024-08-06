@@ -34,7 +34,7 @@ class VggSLTNet(nn.Module):
         self.language_decoder = LanguageDecoder(**llm_config, precision=precision)
 
 
-    def forward(self, batch: dict, predict = False) -> torch.Tensor:
+    def forward(self, batch: dict, predict = False, ret = False) -> torch.Tensor:
         if self.load_features:
             x = batch["features"]
         masks = batch["attn_masks"]
@@ -56,7 +56,8 @@ class VggSLTNet(nn.Module):
                                                 questions=questions, 
                                                 previous_contexts=previous_contexts,
                                                 pls=pls,
-                                                sub_gt=sub_gt)
+                                                sub_gt=sub_gt,
+                                                ret=ret)
         return outputs, labels, gen_sentences
 
 

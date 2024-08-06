@@ -201,10 +201,10 @@ class LanguageDecoder(nn.Module):
 
         return inputs_embeds, attn_masks, position_ids
 
-    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
+    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, ret = False):
         inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
-        if not self.training:
+        if not self.training and not ret:
             gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt)
         else:
             gen_sentences = None
