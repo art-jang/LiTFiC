@@ -29,6 +29,7 @@ synonyms_pkl: ../cslr2_t/bobsl/syns/synonym_pickle_english_and_signdict_and_sign
 rgb_frames: ../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
 misaligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
 heuristic_aligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
-llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
+llm_root: ../hf/Meta-Llama-3-8B
 lm_root: ../cslr2_t/t5_checkpoint/
 question_pool: ./data/question_pool.txt
+cslr2_ckpt: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
