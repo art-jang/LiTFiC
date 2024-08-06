@@ -126,7 +126,10 @@ class SLTLitModule(LightningModule):
                 refs = references[idx:idx+batch_size]
                 cands = candidates[idx:idx+batch_size]
                 inputs = self.bleurt_tokenizer(refs, cands, padding='longest', return_tensors='pt')
-                res = self.bleurt_model(**inputs).logits.flatten().tolist()
+                inputs.input_ids = inputs.input_ids.to(self.bleurt_model.device)
+                inputs.attention_mask = inputs.attention_mask.to(self.bleurt_model.device)
+                inputs.token_type_ids = inputs.token_type_ids.to(self.bleurt_model.device)
+                res = self.bleurt_model(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, token_type_ids=inputs.token_type_ids).logits.flatten().tolist()
                 results.extend(res)
 
         return results

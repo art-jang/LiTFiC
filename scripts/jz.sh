@@ -28,6 +28,6 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 
-srun python src/train.py task_name=llama_sub1_ns experiment=llama3_haran paths=haran \
+srun python src/train.py task_name=llama_sub1_s_prev3 experiment=llama3_haran paths=haran \
     data.dataset_config.sub_sample_shuffle=True \
-    data.dataset_config.max_previous_sentences=1
+    data.dataset_config.max_previous_sentences=3
