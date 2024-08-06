@@ -16,10 +16,13 @@ import ipdb
 import lmdb
 import os
 import json
+from tqdm import tqdm
 
 from src.utils.gather_utils import strings_to_tensor, tensor_to_strings
 from src.utils.vis_utils import save_video
+from src.utils.ret_utils import copy_tensor, calculate_average_logit_scores, calculate_retrieval_metrics 
 from bleurt_pytorch import BleurtConfig, BleurtForSequenceClassification, BleurtTokenizer
+
 
 
 class SLTLitModule(LightningModule):
@@ -105,6 +108,7 @@ class SLTLitModule(LightningModule):
         self.prev_context = []
         self.blip_cap = []
 
+        self.ret_dataloader = None
         self.rgb_lmdb_env = None
 
         self.vis_dir = f"{output_dir}/vis"
@@ -116,7 +120,73 @@ class SLTLitModule(LightningModule):
     
     def predict_step(self, batch, batch_idx):
         pass
+
+    def collect_dataset(self, dataloader):
+        result_dict = {}
+    
+        # Iterate through each dictionary in the list
+        for dictionary in dataloader:
+            for key, value in dictionary.items():
+                if key in result_dict:
+                    if isinstance(value, list):
+                        result_dict[key].extend(value)
+                    elif isinstance(value, torch.Tensor):
+                        result_dict[key].extend([value[i] for i in range(value.shape[0])])
+                else:
+                    if isinstance(value, list):
+                        result_dict[key] = value.copy()  # use copy to avoid modifying the original list
+                    elif isinstance(value, torch.Tensor):
+                        result_dict[key] = []
+                        result_dict[key].extend([value[i] for i in range(value.shape[0])])  # use clone to avoid modifying the original tensor
         
+        return result_dict
+
+    def perform_retrieval(self, dataloader):
+        dataset = self.collect_dataset(dataloader)
+
+        bs = 2
+
+        score_matrix = []
+        
+        for idx in range(len(dataset["pls"])):
+
+            score_row = []
+
+            feats = dataset["features"][idx]
+            attn_masks = dataset["attn_masks"][idx]
+
+            feats = copy_tensor(feats, bs)
+            attn_masks = copy_tensor(attn_masks, bs)
+            
+            for idx2 in tqdm(range(0, len(dataset["pls"]), bs)):
+
+                tmp_batch = {
+                        "features": feats,
+                        "attn_masks": attn_masks,
+                        "subtitles": dataset["subtitles"][idx2:idx2+bs],
+                        "questions": dataset["questions"][idx2:idx2+bs],
+                        "previous_contexts": dataset["previous_contexts"][idx2:idx2+bs],
+                        "pls": dataset["pls"][idx2:idx2+bs],
+                        "target_indices": dataset["target_indices"][idx2:idx2+bs],
+                        "target_labels": dataset["target_labels"][idx2:idx2+bs],
+                        "start": dataset["start"][idx2:idx2+bs],
+                        "end": dataset["end"][idx2:idx2+bs],
+                        "video_names": dataset["video_names"][idx2:idx2+bs],
+                        "sub_gt": dataset["sub_gt"][idx2:idx2+bs]
+                }
+                with torch.no_grad():
+                    outputs, labels, preds = self.forward(tmp_batch, ret=True)
+                
+                scores = calculate_average_logit_scores(outputs["logits"], labels)
+
+                score_row.extend(scores)
+            
+            score_matrix.append(score_row)
+
+        ret_metrics = calculate_retrieval_metrics(score_matrix)
+        
+        return ret_metrics   
+   
     def get_bleurt_scores(self, references, candidates, batch_size = 16):
         self.bleurt_model.eval()
         with torch.no_grad():
@@ -126,18 +196,21 @@ class SLTLitModule(LightningModule):
                 refs = references[idx:idx+batch_size]
                 cands = candidates[idx:idx+batch_size]
                 inputs = self.bleurt_tokenizer(refs, cands, padding='longest', return_tensors='pt')
-                res = self.bleurt_model(**inputs).logits.flatten().tolist()
+                inputs.input_ids = inputs.input_ids.to(self.bleurt_model.device)
+                inputs.attention_mask = inputs.attention_mask.to(self.bleurt_model.device)
+                inputs.token_type_ids = inputs.token_type_ids.to(self.bleurt_model.device)
+                res = self.bleurt_model(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask, token_type_ids=inputs.token_type_ids).logits.flatten().tolist()
                 results.extend(res)
 
         return results
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, ret = False) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
 
         :param x: A tensor of images.
         :return: A tensor of logits.
         """ 
-        return self.net(x)
+        return self.net(x, ret=ret)
 
     def on_train_start(self) -> None:
         """Lightning hook that is called when training begins."""
@@ -252,10 +325,23 @@ class SLTLitModule(LightningModule):
         cider_score = self.cider.compute_score(references, hypotheses)[0]
         bleurt_score = sum(self.get_bleurt_scores(self.all_gts, self.all_preds))/len(self.all_gts)
 
+        ret_metrics = None
+        # if not self.trainer.sanity_checking:
+        ret_metrics = self.perform_retrieval(self.ret_dataloader)
+
         self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
         self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
         self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
         self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
+
+        if ret_metrics is not None:
+            self.log("R@1", ret_metrics["recall_scores"][1], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("R@5", ret_metrics["recall_scores"][5], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("R@10", ret_metrics["recall_scores"][10], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("R@25", ret_metrics["recall_scores"][25], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("R@50", ret_metrics["recall_scores"][50], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("mean_rank", ret_metrics["mean_rank"], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("median_rank", ret_metrics["median_rank"], on_step=False, on_epoch=True, prog_bar=True)
 
         self.all_preds = []
         self.all_gts = []
@@ -281,6 +367,8 @@ class SLTLitModule(LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
+        if self.ret_dataloader is None:
+            self.ret_dataloader = self.trainer.datamodule.ret_dataloader()
         self._eval()
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:

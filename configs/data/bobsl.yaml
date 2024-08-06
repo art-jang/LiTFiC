@@ -5,6 +5,8 @@ pin_memory: True
 collate_fn: src.data.components.sentence.collate_fn_padd_t
 dataset: bobsl
 eval_data_size: 832
+train_data_fraction: 1.0
+ret_data_size: 500
 dataset_config:
   # general parameters to load sentences associated to subtitles
   subset2episode: ${paths.subset2episode}
