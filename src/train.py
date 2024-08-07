@@ -120,10 +120,10 @@ def main(cfg: DictConfig) -> Optional[float]:
     :return: Optional[float] with optimized metric value.
     """
     # attach debugger
-    debugpy.listen(8080)
-    print("Waiting for client")
-    debugpy.wait_for_client()
-    print("Debugger attached")
+    # debugpy.listen(8080)
+    # print("Waiting for client")
+    # debugpy.wait_for_client()
+    # print("Debugger attached")
 
 
     # apply extra utilities

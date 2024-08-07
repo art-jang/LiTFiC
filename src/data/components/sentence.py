@@ -15,6 +15,7 @@ from torch.nn.utils.rnn import pad_sequence
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
 from src.utils.data_utils import sample_sub
+from src.utils.cslr_tools import compress_and_average
 
 class Sentences(Dataset):
     """General dataset class to load sentences from data files"""
@@ -338,7 +339,11 @@ class Sentences(Dataset):
                     if self.word_embds is not None:
                         word_embds_dict[correct_annotation_idx] = self.word_embds[label]
             # video augmentation
+            probs = [p[0].item() for p in probs]
             pls = [self.inverted_vocab[x[0]] for x in list(target_dict.values())]
+
+            pls, probs = compress_and_average(pls, probs)
+            
             if self.video_augmentations is not None:
                 feats, kept_indices = self.video_augmentations(feats)
                 if self.pseudo_label is not None:
@@ -383,6 +388,7 @@ class Sentences(Dataset):
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
             "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle),
+            "probs": probs if self.pseudo_label is not None else None,
         }
 
         '''
@@ -457,6 +463,7 @@ def collate_fn_padd_t(batch: List):
     end = [item["sub_end"] for item in batch]
     video_names = [item["video_name"] for item in batch]
     sub_gt = [item["sub_gt"] for item in batch]
+    probs = [item["probs"] for item in batch]
 
     padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
 
@@ -472,7 +479,8 @@ def collate_fn_padd_t(batch: List):
         "start": start,
         "end": end,
         "video_names": video_names,
-        "sub_gt": sub_gt
+        "sub_gt": sub_gt,
+        "probs": probs
     }
 
 

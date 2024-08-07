@@ -47,7 +47,8 @@ net:
     freeze_decoder: True
     oracle: True
     lora: True
-    sub_sub: True
+    sub_sub: False
+    use_pl_probs: True
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16
