@@ -24,7 +24,7 @@ trainer:
 
 data:
   batch_size: 2
-  num_workers: 8
+  num_workers: 1
 
 model:
   net:
