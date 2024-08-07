@@ -157,6 +157,12 @@ class SLTLitModule(LightningModule):
 
             feats = copy_tensor(feats, bs)
             attn_masks = copy_tensor(attn_masks, bs)
+
+            feats = feats.to(self.device)
+            attn_masks = attn_masks.to(self.device)
+
+            target_indices = [dataset["target_indices"][idx] for _ in range(bs)]
+            target_labels = [dataset["target_labels"][idx] for _ in range(bs)]
             
             for idx2 in tqdm(range(0, len(dataset["pls"]), bs)):
 
@@ -167,8 +173,8 @@ class SLTLitModule(LightningModule):
                         "questions": dataset["questions"][idx2:idx2+bs],
                         "previous_contexts": dataset["previous_contexts"][idx2:idx2+bs],
                         "pls": dataset["pls"][idx2:idx2+bs],
-                        "target_indices": dataset["target_indices"][idx2:idx2+bs],
-                        "target_labels": dataset["target_labels"][idx2:idx2+bs],
+                        "target_indices": target_indices,
+                        "target_labels": target_labels,
                         "start": dataset["start"][idx2:idx2+bs],
                         "end": dataset["end"][idx2:idx2+bs],
                         "video_names": dataset["video_names"][idx2:idx2+bs],

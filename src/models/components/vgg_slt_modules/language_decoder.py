@@ -18,6 +18,7 @@ class LanguageDecoder(nn.Module):
                  oracle=False,
                  sub_sub = False,
                  lora = False,
+                 use_pl_probs = False,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -53,6 +54,7 @@ class LanguageDecoder(nn.Module):
         
         self.oracle = oracle
         self.sub_sub = sub_sub
+        self.use_pl_probs = use_pl_probs
 
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
@@ -60,7 +62,7 @@ class LanguageDecoder(nn.Module):
             input_ids = torch.cat([input_ids, torch.LongTensor([self.tokenizer.eos_token_id]).to(device)], dim=0)
         return input_ids
     
-    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None):
+    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None):
         if previous_contexts is not None:
             questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
                          else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
@@ -68,17 +70,27 @@ class LanguageDecoder(nn.Module):
         if self.sub_sub:
             pls = sub_gt
         
+        # ipdb.set_trace()
+        
         if self.oracle:
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
-                            "Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+                            "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            if self.use_pl_probs and not self.sub_sub:
+                system_prompt +=  "3. The user may provide a list probabilities for each word. You can use these probabilities to generate the sentence.\n"
+
             questions = [system_prompt for q in questions]
+
+            if previous_contexts is not None:
+                questions = [q + ' The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
         
-        if self.oracle and previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' + ", ".join(list(set(pl))) + ". The sentence is: " for q, pl, c in zip(questions, pls, previous_contexts)]
+            questions = [q + 'And the word list is as follows: ' + " ".join(pl) for q, pl in zip(questions, pls)]
         
-        if self.oracle:
-            questions = [q + 'And the word list is as follows: ' + " ".join(list(set(pl))) + "\nGenerated Sentence: " for q, pl in zip(questions, pls)]
+            if self.use_pl_probs and not self.sub_sub:
+                questions = [q + 'The probabilities are as follows: ' + ", ".join([str(p) for p in pl]) for q, pl in zip(questions, probs)]
+
+            questions = [q + '\nGenerated Sentence: ' for q in questions]
+        
 
         max_len = 0
         labels = []
@@ -137,7 +149,7 @@ class LanguageDecoder(nn.Module):
 
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
-    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None):
+    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None):
         if previous_contexts is not None:
             questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
                          else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
@@ -148,14 +160,23 @@ class LanguageDecoder(nn.Module):
         if self.oracle:
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
-                            "Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+                            "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            if self.use_pl_probs and not self.sub_sub:
+                system_prompt +=  "3. The user may provide a list probabilities for each word. You can use these probabilities to generate the sentence.\n"
+
             questions = [system_prompt for q in questions]
+
         
-        if self.oracle and previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' + ", ".join(list(set(pl))) + ". The sentence is: " for q, pl, c in zip(questions, pls, previous_contexts)]
+            if previous_contexts is not None:
+                questions = [q + ' The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
         
-        if self.oracle:
-            questions = [q + 'And the word list is as follows: ' + " ".join(list(set(pl))) + "\nGenerated Sentence: " for q, pl in zip(questions, pls)]
+            questions = [q + 'And the word list is as follows: ' + " ".join(pl) for q, pl in zip(questions, pls)]
+        
+            if self.use_pl_probs and not self.sub_sub:
+                questions = [q + 'The probabilities are as follows: ' + ", ".join([str(p) for p in pl]) for q, pl in zip(questions, probs)]
+
+            questions = [q + '\nGenerated Sentence: ' for q in questions]
+    
 
         max_len = 0
         inputs_embeds = []
@@ -201,18 +222,18 @@ class LanguageDecoder(nn.Module):
 
         return inputs_embeds, attn_masks, position_ids
 
-    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, ret = False):
-        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
+    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False):
+        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:
-            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt)
+            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs)
         else:
             gen_sentences = None
             
         return outputs, labels, gen_sentences
     
-    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
+    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None):
+        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id)
         
         return outputs
