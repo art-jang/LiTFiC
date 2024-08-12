@@ -27,7 +27,7 @@ def sample_sub(sentence, shuffle, pct=0.3):
             }
     filtered_words = [word for word in words if word not in stop_words]
 
-    if not shuffle:
+    if not shuffle and pct == 1.0:
         if len(filtered_words) == 0:
             return words
         return filtered_words
