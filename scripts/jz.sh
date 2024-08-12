@@ -28,9 +28,9 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 
-srun python src/train.py task_name=llama_sub25 experiment=llama3_haran paths=haran \
+srun python src/train.py task_name=llama_sub100 experiment=llama3_haran paths=haran \
     data.dataset_config.max_previous_sentences=0 \
-    data.dataset_config.sub_sample_pct=0.25 \
+    data.dataset_config.sub_sample_pct=1.0 \
     model.net.llm_config.sub_sub=True \
     model.net.llm_config.use_pl_probs=False\
     model.net.llm_config.oracle=True
