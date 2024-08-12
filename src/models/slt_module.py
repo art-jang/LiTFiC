@@ -98,7 +98,7 @@ class SLTLitModule(LightningModule):
         self.rouge = Rouge()
         self.cider = Cider()
 
-        self.all_preds =[]
+        self.all_preds=[]
         self.all_gts = []
         self.pls = []
         self.starts = []
@@ -107,6 +107,7 @@ class SLTLitModule(LightningModule):
         self.sub_gts = []
         self.prev_context = []
         self.blip_cap = []
+        self.probs = []
 
         self.ret_dataloader = None
         self.rgb_lmdb_env = None
@@ -178,20 +179,32 @@ class SLTLitModule(LightningModule):
                         "start": dataset["start"][idx2:idx2+bs],
                         "end": dataset["end"][idx2:idx2+bs],
                         "video_names": dataset["video_names"][idx2:idx2+bs],
-                        "sub_gt": dataset["sub_gt"][idx2:idx2+bs]
+                        "sub_gt": dataset["sub_gt"][idx2:idx2+bs],
+                        "probs": dataset["probs"][idx2:idx2+bs]
                 }
                 with torch.no_grad():
-                    outputs, labels, preds = self.forward(tmp_batch, ret=True)
+                    outputs_list, labels_list, _ = self.forward(tmp_batch, ret=True)
+
+                    if len(score_row) == 0:
+                        for _ in range(len(outputs_list)):
+                            score_row.append([])
+                    if len(score_matrix) == 0:
+                        for _ in range(len(outputs_list)):
+                            score_matrix.append([])
                 
-                scores = calculate_average_logit_scores(outputs["logits"], labels)
+                for idx3, (outputs, labels) in enumerate(zip(outputs_list, labels_list)):
+                    scores = calculate_average_logit_scores(outputs["logits"], labels)
+                    score_row[idx3].extend(scores)
 
-                score_row.extend(scores)
-            
-            score_matrix.append(score_row)
+            for idm in range(len(score_row)):
+                score_matrix[idm].append(score_row[idm])
 
-        ret_metrics = calculate_retrieval_metrics(score_matrix)
+        ret_metrics_list = []
+        for i in range(len(score_matrix)):
+            ret_metrics = calculate_retrieval_metrics(score_matrix[i])
+            ret_metrics_list.append(ret_metrics)
         
-        return ret_metrics   
+        return ret_metrics_list  
    
     def get_bleurt_scores(self, references, candidates, batch_size = 16):
         self.bleurt_model.eval()
@@ -227,7 +240,8 @@ class SLTLitModule(LightningModule):
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Perform a single model step on a batch of data.
+        """
+        Perform a single model step on a batch of data.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
 
@@ -236,25 +250,31 @@ class SLTLitModule(LightningModule):
             - A tensor of predictions.
             - A tensor of target labels.
         """
-        outputs, labels, preds = self.forward(batch)
-        loss = self.criterion(outputs, labels)
-        
-        if preds is not None:
-            for idx, (pred, gt) in enumerate(zip(preds, batch["subtitles"])):
-                 
-                decoded_pred = self.net.language_decoder.tokenizer.decode(pred, skip_special_tokens=True)
+        outputs_list, labels_list, preds_list = self.forward(batch)
 
-                self.all_preds.append(decoded_pred)
-                self.all_gts.append(gt)
+        if len(self.all_preds) == 0 and preds_list is not None:
+            self.all_preds = [[] for _ in range(len(preds_list))]
+        
+        loss = self.criterion(outputs_list[0], labels_list[0])
+        
+
+        if preds_list is not None:
+            for idx_p, preds in enumerate(preds_list):
+                for _, pred in enumerate(preds):
+                    decoded_pred = self.net.language_decoder.tokenizer.decode(pred, skip_special_tokens=True)
+                    self.all_preds[idx_p].append(decoded_pred)
+                
+            self.all_gts.extend(batch["subtitles"])
             self.pls.extend(batch['pls'])
             self.starts.extend(batch['start'])
             self.ends.extend(batch['end'])
             self.names.extend(batch['video_names'])
             self.sub_gts.extend(batch['sub_gt'])
+            self.probs.extend(batch['probs'])
             if batch['previous_contexts'] is not None:
                 self.prev_context.extend(batch['previous_contexts'])
 
-        return loss, preds, labels
+        return loss, preds_list, labels_list
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -266,7 +286,7 @@ class SLTLitModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, labels = self.model_step(batch)
+        loss, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
@@ -278,15 +298,45 @@ class SLTLitModule(LightningModule):
 
     def on_train_epoch_end(self) -> None:
         pass
+
+    def get_cap_metrics(self, idx = 0):
+        
+        tensor_preds = strings_to_tensor(self.all_preds[idx])
+        tensor_gt = strings_to_tensor(self.all_gts)
+
+        m_preds_tensor = self.all_gather(tensor_preds)
+        m_gt_tensor = self.all_gather(tensor_gt)
+
+        all_preds = tensor_to_strings(m_preds_tensor.view(-1, 1024))
+        all_gts = tensor_to_strings(m_gt_tensor.view(-1, 1024))
+
+        hypotheses = {'image'+str(i): [all_preds[i]] for i in range(len(all_preds))}
+        references = {'image'+str(i): [all_gts[i]] for i in range(len(all_gts))}
+
+        bleu_score = self.bleu.compute_score(hypotheses, references)[0][3]
+        rouge_score = self.rouge.compute_score(references, hypotheses)[0]
+        cider_score = self.cider.compute_score(references, hypotheses)[0]
+        bleurt_score = sum(self.get_bleurt_scores(all_gts, all_preds))/len(all_gts)
+
+        return bleu_score, rouge_score, cider_score, bleurt_score
     
     def _eval(self) -> None:
         if self.global_rank == 0:
-            hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
+            hypotheses = {'image'+str(i): [self.all_preds[0][i]] for i in range(len(self.all_preds[0]))}
             references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
 
             _, rouge_scores  = self.rouge.compute_score(references, hypotheses)
 
-            bleurt_scores = self.get_bleurt_scores(self.all_gts, self.all_preds)
+            bleurt_scores = self.get_bleurt_scores(self.all_gts, self.all_preds[0])
+
+            if len(self.all_preds) > 1:
+
+                hypotheses = {'image'+str(i): [self.all_preds[1][i]] for i in range(len(self.all_preds[1]))}
+                references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
+
+                _, rouge_scores_pl  = self.rouge.compute_score(references, hypotheses)
+
+                bleurt_scores_pl = self.get_bleurt_scores(self.all_gts, self.all_preds[1])
 
             vis_list = []
 
@@ -299,10 +349,15 @@ class SLTLitModule(LightningModule):
                 tmp_dict['start'] = self.starts[idx]
                 tmp_dict['end'] = self.ends[idx]
                 tmp_dict['gt'] = self.all_gts[idx]
-                tmp_dict['pred'] = self.all_preds[idx]
+                tmp_dict['pred'] = self.all_preds[0][idx]
                 tmp_dict['pls'] = self.pls[idx]
                 tmp_dict['sub_gt'] = self.sub_gts[idx]
                 tmp_dict['bleurt'] = bleurt_scores[idx]
+                tmp_dict['prob'] = self.probs[idx]
+                if len(self.all_preds) > 1:
+                    tmp_dict["pred_pls"] = self.all_preds[1][idx]
+                    tmp_dict["bleurt_pls"] = bleurt_scores_pl[idx]
+                    tmp_dict["rouge_pls"] = rouge_scores_pl[idx]
 
                 if len(self.prev_context) > 0:
                     tmp_dict['prev_contexts'] = self.prev_context[idx] 
@@ -313,41 +368,43 @@ class SLTLitModule(LightningModule):
             
             with open(f'{self.vis_dir}/{self.current_epoch}/info.json', 'w') as f:
                 json.dump(vis_list, f)
-    
-        tensor_preds = strings_to_tensor(self.all_preds)
-        tensor_gt = strings_to_tensor(self.all_gts)
 
-        m_preds_tensor = self.all_gather(tensor_preds)
-        m_gt_tensor = self.all_gather(tensor_gt)
 
-        self.all_preds = tensor_to_strings(m_preds_tensor.view(-1, 1024))
-        self.all_gts = tensor_to_strings(m_gt_tensor.view(-1, 1024))
+        for idx_p in range(len(self.all_preds)):
+            bleu_score, rouge_score, cider_score, bleurt_score = self.get_cap_metrics(idx_p)
+            if len(self.all_preds) > 1:
+                self.log(f"bleu_{idx_p}", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"rouge_{idx_p}", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"cider_{idx_p}", cider_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"bleurt_{idx_p}", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
+            else:
+                self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
 
-        hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
-        references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
-
-        bleu_score = self.bleu.compute_score(hypotheses, references)[0][3]
-        rouge_score = self.rouge.compute_score(references, hypotheses)[0]
-        cider_score = self.cider.compute_score(references, hypotheses)[0]
-        bleurt_score = sum(self.get_bleurt_scores(self.all_gts, self.all_preds))/len(self.all_gts)
-
-        ret_metrics = None
+        ret_metrics_list = None
         # if not self.trainer.sanity_checking:
-        ret_metrics = self.perform_retrieval(self.ret_dataloader)
+        ret_metrics_list = self.perform_retrieval(self.ret_dataloader)
 
-        self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
-
-        if ret_metrics is not None:
-            self.log("R@1", ret_metrics["recall_scores"][1], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("R@5", ret_metrics["recall_scores"][5], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("R@10", ret_metrics["recall_scores"][10], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("R@25", ret_metrics["recall_scores"][25], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("R@50", ret_metrics["recall_scores"][50], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("mean_rank", ret_metrics["mean_rank"], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("median_rank", ret_metrics["median_rank"], on_step=False, on_epoch=True, prog_bar=True)
+        if ret_metrics_list is not None:
+            for idx, ret_metrics in enumerate(ret_metrics_list):
+                if len(self.all_preds) > 1:
+                    self.log(f"R@1_{idx}", ret_metrics["recall_scores"][1], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log(f"R@5_{idx}", ret_metrics["recall_scores"][5], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log(f"R@10_{idx}", ret_metrics["recall_scores"][10], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log(f"R@25_{idx}", ret_metrics["recall_scores"][25], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log(f"R@50_{idx}", ret_metrics["recall_scores"][50], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log(f"mean_rank_{idx}", ret_metrics["mean_rank"], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log(f"median_rank_{idx}", ret_metrics["median_rank"], on_step=False, on_epoch=True, prog_bar=True)
+                else:
+                    self.log("R@1", ret_metrics["recall_scores"][1], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log("R@5", ret_metrics["recall_scores"][5], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log("R@10", ret_metrics["recall_scores"][10], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log("R@25", ret_metrics["recall_scores"][25], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log("R@50", ret_metrics["recall_scores"][50], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log("mean_rank", ret_metrics["mean_rank"], on_step=False, on_epoch=True, prog_bar=True)
+                    self.log("median_rank", ret_metrics["median_rank"], on_step=False, on_epoch=True, prog_bar=True)
 
         self.all_preds = []
         self.all_gts = []
@@ -357,6 +414,8 @@ class SLTLitModule(LightningModule):
         self.names = []
         self.sub_gts = []
         self.prev_context = []
+        self.blip_cap = []
+        self.probs = []
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.
@@ -365,7 +424,7 @@ class SLTLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
@@ -384,7 +443,7 @@ class SLTLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
