@@ -59,6 +59,8 @@ class Sentences(Dataset):
         verbose: bool = False,
         sub_sample_shuffle: Optional[str] = True,
         sub_sample_pct: Optional[float] = 1.0,
+        sub_sample_replace: Optional[bool] = False,
+        pl_dist_path: Optional[str] = None,
     ):
         """
         Args:
@@ -182,6 +184,12 @@ class Sentences(Dataset):
         
         self.sub_sample_shuffle = True if setname == "train" else False
         self.sub_sample_pct = sub_sample_pct
+        self.sub_sample_replace = sub_sample_replace
+
+        self.pl_dist = None
+        if pl_dist_path is not None:
+            self.pl_dist = pickle.load(open(pl_dist_path, "rb"))
+        
 
 
     def fix_synonyms_dict(self) -> None:
@@ -320,7 +328,7 @@ class Sentences(Dataset):
                 # convert annotation_idx to feature_idx
                 correct_annotation_idx = int(
                     annotation_idx * self.pseudo_label.lmdb_stride / \
-                        (self.features.lmdb_stride * self.pseudo_label.load_stride)
+                        (2 * self.pseudo_label.load_stride)
                 )
                 if prob >= self.pl_filter and annotation_idx in min_count_indices:
                     # only keep annotations with
@@ -389,7 +397,7 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
-            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct),
+            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist),
             "probs": probs if self.pseudo_label is not None else None,
         }
 
@@ -467,7 +475,9 @@ def collate_fn_padd_t(batch: List):
     sub_gt = [item["sub_gt"] for item in batch]
     probs = [item["probs"] for item in batch]
 
-    padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
+    padded_features, attn_masks = None, None
+    if features[0] is not None:
+        padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
 
     return {
         "features": padded_features,
