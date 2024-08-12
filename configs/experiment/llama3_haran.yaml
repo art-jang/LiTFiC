@@ -26,9 +26,6 @@ data:
   batch_size: 2
   num_workers: 8
 
-paths:
-  llm_root: ../hf/Meta-Llama-3-8B
-
 model:
   net:
     mm_projector_config:

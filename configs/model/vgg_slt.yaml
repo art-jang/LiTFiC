@@ -39,7 +39,7 @@ net:
       depth: 2
     cslr2_options:
       use: True
-      ckpt_path: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
+      ckpt_path: ${paths.cslr2_ckpt}
       freeze: True
   llm_config:
     pretrained_llm: ${paths.llm_root}

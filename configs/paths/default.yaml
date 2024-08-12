@@ -32,3 +32,4 @@ heuristic_aligned_csv_root: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobs
 llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
 lm_root: ../cslr2/t5_checkpoint/
 question_pool: ./data/question_pool.txt
+cslr2_ckpt: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
