@@ -87,7 +87,7 @@ class LanguageDecoder(nn.Module):
             questions = [q + 'And the word list is as follows: ' + " ".join(pl) for q, pl in zip(questions, pls)]
         
             if self.use_pl_probs and not self.sub_sub:
-                questions = [q + 'The probabilities are as follows: ' + ", ".join([str(p) for p in pl]) for q, pl in zip(questions, probs)]
+                questions = [q + 'The probabilities are as follows: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
 
             questions = [q + '\nGenerated Sentence: ' for q in questions]
         
@@ -173,7 +173,7 @@ class LanguageDecoder(nn.Module):
             questions = [q + 'And the word list is as follows: ' + " ".join(pl) for q, pl in zip(questions, pls)]
         
             if self.use_pl_probs and not self.sub_sub:
-                questions = [q + 'The probabilities are as follows: ' + ", ".join([str(p) for p in pl]) for q, pl in zip(questions, probs)]
+                questions = [q + 'The probabilities are as follows: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
 
             questions = [q + '\nGenerated Sentence: ' for q in questions]
     
@@ -223,6 +223,31 @@ class LanguageDecoder(nn.Module):
         return inputs_embeds, attn_masks, position_ids
 
     def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False):
+        outputs_list = []
+        gen_sentences_list = None
+        labels_list = []
+
+        outputs, labels, gen_sentences = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret)    
+        outputs_list.append(outputs)
+        labels_list.append(labels)
+
+        if gen_sentences is not None:
+            gen_sentences_list = [gen_sentences]
+            
+        if self.oracle and self.sub_sub and not self.training:
+            self.sub_sub = False
+            outputs, labels, gen_sentences = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret)
+            self.sub_sub = True
+            outputs_list.append(outputs)
+            labels_list.append(labels)
+            if gen_sentences_list is not None:
+                gen_sentences_list.append(gen_sentences)
+
+        
+        return outputs_list, labels_list, gen_sentences_list
+
+
+    def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False):
         inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:

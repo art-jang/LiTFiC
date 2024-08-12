@@ -4,7 +4,7 @@ import ipdb
 import string
 
 
-def sample_sub(sentence, shuffle):
+def sample_sub(sentence, shuffle, pct=0.3):
     words = sentence.split()
 
     words = [word.strip(string.punctuation).lower() for word in words]
@@ -34,11 +34,11 @@ def sample_sub(sentence, shuffle):
             
     if len(filtered_words) == 0:
         # If there are only stop words, use the original sentence
-        num_words_to_keep = math.ceil(len(words) * 1)
+        num_words_to_keep = math.ceil(len(words) * pct)
         selected_words = random.sample(words, num_words_to_keep)
     else:
         # Calculate 30% of the remaining words, rounding up
-        num_words_to_keep = math.ceil(len(filtered_words) * 1)
+        num_words_to_keep = math.ceil(len(filtered_words) * pct)
         selected_words = random.sample(filtered_words, num_words_to_keep)
     
     return selected_words
