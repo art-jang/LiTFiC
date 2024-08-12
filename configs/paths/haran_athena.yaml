@@ -34,3 +34,4 @@ lm_root: null
 bleurt_path: lucadiliello/BLEURT-20
 question_pool: ./data/question_pool.txt
 cslr2_ckpt: model_best.pth
+pl_dist_path: pl_dist.pkl

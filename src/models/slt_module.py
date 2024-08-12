@@ -153,17 +153,29 @@ class SLTLitModule(LightningModule):
 
             score_row = []
 
-            feats = dataset["features"][idx]
-            attn_masks = dataset["attn_masks"][idx]
+            try:
+                feats = dataset["features"][idx]
+                attn_masks = dataset["attn_masks"][idx]
 
-            feats = copy_tensor(feats, bs)
-            attn_masks = copy_tensor(attn_masks, bs)
+                feats = copy_tensor(feats, bs)
+                attn_masks = copy_tensor(attn_masks, bs)
 
-            feats = feats.to(self.device)
-            attn_masks = attn_masks.to(self.device)
+                feats = feats.to(self.device)
+                attn_masks = attn_masks.to(self.device)
+            
+            except:
+                feats = torch.zeros(bs, 1, 4096).to(self.device)
+                attn_masks = torch.zeros(bs, 1).to(self.device)
 
             target_indices = [dataset["target_indices"][idx] for _ in range(bs)]
             target_labels = [dataset["target_labels"][idx] for _ in range(bs)]
+            
+
+            pls = [dataset["pls"][idx] for _ in range(bs)]
+            sub_gt = [dataset["sub_gt"][idx] for _ in range(bs)]
+            probs = [dataset["probs"][idx] for _ in range(bs)]
+            previous_contexts = [dataset["previous_contexts"][idx] for _ in range(bs)]
+            questions = [dataset["questions"][idx] for _ in range(bs)]
             
             for idx2 in tqdm(range(0, len(dataset["pls"]), bs)):
 
@@ -171,16 +183,16 @@ class SLTLitModule(LightningModule):
                         "features": feats,
                         "attn_masks": attn_masks,
                         "subtitles": dataset["subtitles"][idx2:idx2+bs],
-                        "questions": dataset["questions"][idx2:idx2+bs],
-                        "previous_contexts": dataset["previous_contexts"][idx2:idx2+bs],
-                        "pls": dataset["pls"][idx2:idx2+bs],
+                        "questions": questions,
+                        "previous_contexts": previous_contexts,
+                        "pls": pls,
                         "target_indices": target_indices,
                         "target_labels": target_labels,
                         "start": dataset["start"][idx2:idx2+bs],
                         "end": dataset["end"][idx2:idx2+bs],
                         "video_names": dataset["video_names"][idx2:idx2+bs],
-                        "sub_gt": dataset["sub_gt"][idx2:idx2+bs],
-                        "probs": dataset["probs"][idx2:idx2+bs]
+                        "sub_gt": sub_gt,
+                        "probs": probs
                 }
                 with torch.no_grad():
                     outputs_list, labels_list, _ = self.forward(tmp_batch, ret=True)

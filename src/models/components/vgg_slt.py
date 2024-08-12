@@ -48,9 +48,13 @@ class VggSLTNet(nn.Module):
         sub_gt = batch["sub_gt"]
         probs = batch["probs"]
 
-        # x = self.visual_encoder(x, masks)        
-        x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
-    
+        # x = self.visual_encoder(x, masks)
+        if self.load_features:        
+            x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
+        else:
+            x = torch.zeros(len(pls), 1, 4096).to(self.language_decoder.decoder.device)
+            masks = torch.zeros(len(pls), 1).to(self.language_decoder.decoder.device)
+        
         outputs, labels, gen_sentences = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,

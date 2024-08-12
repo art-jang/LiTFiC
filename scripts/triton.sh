@@ -21,6 +21,11 @@ export CUDA_LAUNCH_BLOCKING=1
 
 python src/train.py task_name=debug experiment=llama3_haran paths=haran_triton \
     data.train_data_fraction=0.0001 \
-    paths.llm_root='meta-llama/Meta-Llama-3-8B' \
+    data.dataset_config.load_features=False \
+    data.dataset_config.max_previous_sentences=0 \
+    data.dataset_config.sub_sample_pct=0.25 \
+    model.net.llm_config.sub_sub=True \
+    model.net.llm_config.use_pl_probs=False\
+    model.net.llm_config.oracle=True
 
 
