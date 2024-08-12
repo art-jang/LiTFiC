@@ -30,6 +30,7 @@ rgb_frames: /scratch/shared/beegfs/haran/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
 misaligned_csv_root: /scratch/shared/beegfs/haran/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
 heuristic_aligned_csv_root: /scratch/shared/beegfs/haran/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
 llm_root: meta-llama/Meta-Llama-3-8B
+bleurt_path: lucadiliello/BLEURT-20
 lm_root: /scratch/shared/beegfs/haran/bobsl/t5_checkpoint/
 question_pool: ./data/question_pool.txt
 cslr2_ckpt: /scratch/shared/beegfs/haran/bobsl/cslr2/model_best.pth

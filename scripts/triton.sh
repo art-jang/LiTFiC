@@ -19,4 +19,8 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 
 export CUDA_LAUNCH_BLOCKING=1
 
-srun python src/train.py task_name=llama_sub1_lora experiment=llama3_haran paths=haran_triton
+python src/train.py task_name=debug experiment=llama3_haran paths=haran_triton \
+    data.train_data_fraction=0.0001 \
+    paths.llm_root='meta-llama/Meta-Llama-3-8B' \
+
+
