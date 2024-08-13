@@ -58,12 +58,11 @@ def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None):
         num_words_to_keep = math.ceil(len(words) * 1)
         selected_words = random.sample(words, num_words_to_keep)
     else:
-        # Calculate 30% of the remaining words, rounding up
+        # Calculate pct% of the remaining words, rounding up
         num_words_to_keep = math.ceil(len(filtered_words) * pct)
         selected_words = random.sample(filtered_words, num_words_to_keep)
     
     if replace and pl_dist is not None and len(filtered_words) > 0:
-        # Replace words with placeholder tokens
         if len(filtered_words) - num_words_to_keep > 0:
             sampled_pls = sample_pls(pl_dist, len(filtered_words) - num_words_to_keep)
             selected_words.extend(sampled_pls)

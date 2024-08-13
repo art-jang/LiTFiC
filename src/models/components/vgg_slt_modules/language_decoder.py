@@ -19,6 +19,7 @@ class LanguageDecoder(nn.Module):
                  sub_sub = False,
                  lora = False,
                  use_pl_probs = False,
+                 use_pl_w_feats = False,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -55,6 +56,7 @@ class LanguageDecoder(nn.Module):
         self.oracle = oracle
         self.sub_sub = sub_sub
         self.use_pl_probs = use_pl_probs
+        self.use_pl_w_feats = use_pl_w_feats
 
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
@@ -63,16 +65,26 @@ class LanguageDecoder(nn.Module):
         return input_ids
     
     def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None):
-        if previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
-                         else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
+
+        final_q = None
+        if not self.oracle:
+            
+            if previous_contexts is not None:
+                questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
+                            else q for q, c in zip(questions, previous_contexts)]
+            
+            if self.use_pl_w_feats:
+                questions = [q + 'The following are some possible words present in the sentence: ' + " ".join(pl) for q, pl in zip(questions, pls)]
+                if self.use_pl_probs:
+                    questions = [q + 'The confidences for the previous words are: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
+            
+            questions = [q + ". The following are the video tokens: " for q in questions]
+            final_q = ["\nGenerated Sentence: " for _ in questions]
         
-        if self.sub_sub:
-            pls = sub_gt
-        
-        # ipdb.set_trace()
-        
-        if self.oracle:
+        else:
+            if self.sub_sub:
+                pls = sub_gt
+
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
                             "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
@@ -102,6 +114,10 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.embed_tokens(cur_q)
+
+                if final_q is not None:
+                    cur_final_q = self._tokenize(final_q[i], device=device)[:-1]
+                    cur_final_q_embed = self.embed_tokens(cur_final_q)
                 
             cur_s_embed = self.embed_tokens(cur_s)
 
@@ -109,8 +125,12 @@ class LanguageDecoder(nn.Module):
                 cur_embed = torch.cat([cur_q_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
                 cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
             elif questions is not None:
-                cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
-                cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
+                if final_q is not None:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed, cur_s_embed], dim=0)
+                    cur_label = cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed)+len(cur_final_q_embed))).to(device), cur_s], dim=0)
+                else:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
+                    cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
             else:
                 # add bos token embedding to the seqymces and the bos token to the labels
                 cur_v_embed = torch.cat([self.embed_tokens(torch.LongTensor([self.tokenizer.bos_token_id]).to(device)), cur_v_embed], dim=0)
@@ -150,14 +170,26 @@ class LanguageDecoder(nn.Module):
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
     def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None):
-        if previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
-                         else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
+
+        final_q = None
+        if not self.oracle:
+
+            if previous_contexts is not None:
+                questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
+                            else q for q, c in zip(questions, previous_contexts)]
+            
+            if self.use_pl_w_feats:
+                questions = [q + 'The following are some possible words present in the sentence: ' + ", ".join(pl) for q, pl in zip(questions, pls)]
+                if self.use_pl_probs:
+                    questions = [q + '. The confidences for the previous words are: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
+            
+            questions = [q + ". The following are the video tokens: " for q in questions]
+            final_q = ["\nGenerated Sentence: " for _ in questions]
         
-        if self.sub_sub:
-            pls = sub_gt
-        
-        if self.oracle:
+        else:
+            if self.sub_sub:
+                pls = sub_gt
+                
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
                             "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
@@ -166,7 +198,6 @@ class LanguageDecoder(nn.Module):
 
             questions = [system_prompt for q in questions]
 
-        
             if previous_contexts is not None:
                 questions = [q + ' The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
         
@@ -176,7 +207,7 @@ class LanguageDecoder(nn.Module):
                 questions = [q + 'The probabilities are as follows: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
 
             questions = [q + '\nGenerated Sentence: ' for q in questions]
-    
+        
 
         max_len = 0
         inputs_embeds = []
@@ -186,8 +217,16 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.embed_tokens(cur_q)
+
+                if final_q is not None:
+                    cur_final_q = self._tokenize(final_q[i], device=device)[:-1]
+                    cur_final_q_embed = self.embed_tokens(cur_final_q)
+
             if questions is not None:
-                cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]            
+                if final_q is not None:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed], dim=0)
+                else:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]            
             else:
                 cur_v_embed = torch.cat([self.embed_tokens(torch.LongTensor([self.tokenizer.bos_token_id]).to(device)), cur_v_embed], dim=0)
                 cur_embed = cur_v_embed

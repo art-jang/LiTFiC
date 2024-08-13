@@ -49,6 +49,7 @@ net:
     lora: True
     sub_sub: True
     use_pl_probs: False
+    use_pl_w_feats: False
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16

@@ -169,8 +169,6 @@ class SLTLitModule(LightningModule):
 
             target_indices = [dataset["target_indices"][idx] for _ in range(bs)]
             target_labels = [dataset["target_labels"][idx] for _ in range(bs)]
-            
-
             pls = [dataset["pls"][idx] for _ in range(bs)]
             sub_gt = [dataset["sub_gt"][idx] for _ in range(bs)]
             probs = [dataset["probs"][idx] for _ in range(bs)]
