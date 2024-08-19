@@ -55,6 +55,9 @@ class VggSLTNet(nn.Module):
             x = torch.zeros(len(pls), 1, 4096).to(self.language_decoder.decoder.device, dtype=self.language_decoder.torch_dtype)
             masks = torch.zeros(len(pls), 1).to(self.language_decoder.decoder.device, dtype=self.language_decoder.torch_dtype)
         
+        x = x.to(self.language_decoder.torch_dtype)
+        masks = masks.to(self.language_decoder.torch_dtype)
+
         outputs, labels, gen_sentences = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,
