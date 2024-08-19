@@ -7,6 +7,8 @@ import pickle
 import numpy as np
 from typing import Optional
 from torch.utils.data import Dataset
+import math
+from src.utils.data_utils import unique_ordered_list
 
 class Subtitles(Dataset):
     """Generic dataset to load subtitles from data files"""
@@ -27,6 +29,7 @@ class Subtitles(Dataset):
         text_augmentations: Optional[object] = None,
         fps: int = 25,
         verbose: bool = False,
+        blip_cap_path: Optional[str] = None,
     ):
         """
         Args:
@@ -47,6 +50,8 @@ class Subtitles(Dataset):
             fps (int): fps of the videos associated to the subtitles.
             verbose: (bool, optional): verbosity.
         """
+        with open(blip_cap_path, 'rb') as f:
+            self.blip_cap_data = pickle.load(f)
         self.verbose = verbose
         with open(subset2episode, "rb") as json_f:
             subset2episode = json.load(json_f)
@@ -83,6 +88,10 @@ class Subtitles(Dataset):
             )
         filtered_indices = np.where(
             np.isin(self.subtitles["episode_name"], self.setname_episode),
+        )[0]
+        self.filter_subtitles(filtered_indices)
+        filtered_indices = np.where(
+            np.isin(self.subtitles["episode_name"], self.blip_cap_data["video"]),
         )[0]
         self.filter_subtitles(filtered_indices)
         # filter by duration
@@ -249,6 +258,16 @@ class Subtitles(Dataset):
             else:
                 question = self.question_pool[0]
         
+        start_second = math.floor(sub_starts)
+        end_second = math.ceil(sub_ends)
+
+        bg_description = self.blip_cap_data["captions"][self.blip_cap_data["video"].index(video_name.split(".")[0])][start_second:end_second+1]
+        bg_description = unique_ordered_list(bg_description)
+        bg_description = [x for x in bg_description if x != '']
+        if len(bg_description) == 0:
+            bg_description = ['No description available']
+        bg_description = '. '.join(bg_description) + '.'
+        
         return {
             "subtitle": subtitles,
             "sub_start": sub_starts,
@@ -256,4 +275,5 @@ class Subtitles(Dataset):
             "video_name": video_names,
             "previous_context": previous_context,
             "question": question,
+            "bg_description": bg_description    
         }

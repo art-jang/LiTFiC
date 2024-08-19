@@ -61,6 +61,7 @@ class Sentences(Dataset):
         sub_sample_pct: Optional[float] = 1.0,
         sub_sample_replace: Optional[bool] = False,
         pl_dist_path: Optional[str] = None,
+        blip_cap_path: Optional[str] = None,
     ):
         """
         Args:
@@ -125,6 +126,7 @@ class Sentences(Dataset):
             text_augmentations=text_augmentations,
             fps=fps,
             verbose=verbose,
+            blip_cap_path=blip_cap_path,
         )
         
         # features
@@ -258,6 +260,7 @@ class Sentences(Dataset):
         sub_end: float,
         previous_context: Optional[str] = None,
         question: Optional[str] = None,
+        bg_description: Optional[str] = None,
     ) -> dict:
         """Loads single item based on subtitle and video name"""
         if self.skip_mode.value:
@@ -273,6 +276,7 @@ class Sentences(Dataset):
                 "sub_end": sub_end,
                 "previous_context": previous_context,
                 "question": question,
+                "bg_description": bg_description,
             }
         feats = None
         if self.features is not None:
@@ -399,6 +403,7 @@ class Sentences(Dataset):
             "pls": pls if self.pseudo_label is not None else None,
             "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist),
             "probs": probs if self.pseudo_label is not None else None,
+            "bg_description": bg_description,
         }
 
         '''
@@ -423,7 +428,8 @@ class Sentences(Dataset):
                                     sub_start=sub_starts,
                                     sub_end=sub_ends,
                                     previous_context=subtitles["previous_context"],
-                                    question=subtitles["question"],)
+                                    question=subtitles["question"],
+                                    bg_description=subtitles["bg_description"])
 
 
 def pad_tensors_and_create_attention_masks(tensor_list, padding_side='right'):
@@ -474,6 +480,7 @@ def collate_fn_padd_t(batch: List):
     video_names = [item["video_name"] for item in batch]
     sub_gt = [item["sub_gt"] for item in batch]
     probs = [item["probs"] for item in batch]
+    bg_description = [item["bg_description"] for item in batch]
 
     padded_features, attn_masks = None, None
     if features[0] is not None:
@@ -492,7 +499,8 @@ def collate_fn_padd_t(batch: List):
         "end": end,
         "video_names": video_names,
         "sub_gt": sub_gt,
-        "probs": probs
+        "probs": probs,
+        "bg_description": bg_description
     }
 
 

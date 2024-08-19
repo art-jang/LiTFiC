@@ -48,6 +48,8 @@ class VggSLTNet(nn.Module):
         sub_gt = batch["sub_gt"]
         probs = batch["probs"]
 
+        background_description = batch["bg_description"]
+
         # x = self.visual_encoder(x, masks)
         if self.load_features:        
             x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
@@ -66,7 +68,8 @@ class VggSLTNet(nn.Module):
                                                 pls=pls,
                                                 sub_gt=sub_gt,
                                                 probs=probs,
-                                                ret=ret)
+                                                ret=ret,
+                                                background_description=background_description)
         return outputs, labels, gen_sentences
 
 

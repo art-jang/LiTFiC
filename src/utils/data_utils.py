@@ -68,3 +68,13 @@ def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None):
             selected_words.extend(sampled_pls)
     
     return selected_words
+
+
+def unique_ordered_list(lst):
+    seen = set()
+    unique_list = []
+    for item in lst:
+        if item not in seen:
+            unique_list.append(item)
+            seen.add(item)
+    return unique_list

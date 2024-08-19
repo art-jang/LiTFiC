@@ -56,3 +56,4 @@ dataset_config:
   sub_sample_pct: 0.5
   sub_sample_replace: False
   pl_dist_path: ${paths.pl_dist_path}
+  blip_cap_path: ${paths.blip_cap_path}

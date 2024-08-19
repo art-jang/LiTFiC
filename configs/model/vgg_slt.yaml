@@ -52,6 +52,8 @@ net:
     use_pl_w_feats: False
     mix_in_pls: False
     mix_in_pls_prob: 0.5
+    bg_desc: False
+    use_bg_w_sub: False
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16

@@ -175,6 +175,7 @@ class SLTLitModule(LightningModule):
             probs = [dataset["probs"][idx] for _ in range(bs)]
             previous_contexts = [dataset["previous_contexts"][idx] for _ in range(bs)]
             questions = [dataset["questions"][idx] for _ in range(bs)]
+            bg_description = [dataset["bg_description"][idx] for _ in range(bs)]
             
             for idx2 in tqdm(range(0, len(dataset["pls"]), bs)):
 
@@ -191,7 +192,8 @@ class SLTLitModule(LightningModule):
                         "end": dataset["end"][idx2:idx2+bs],
                         "video_names": dataset["video_names"][idx2:idx2+bs],
                         "sub_gt": sub_gt,
-                        "probs": probs
+                        "probs": probs,
+                        "bg_description": bg_description
                 }
                 with torch.no_grad():
                     outputs_list, labels_list, _ = self.forward(tmp_batch, ret=True)
@@ -282,6 +284,7 @@ class SLTLitModule(LightningModule):
             self.names.extend(batch['video_names'])
             self.sub_gts.extend(batch['sub_gt'])
             self.probs.extend(batch['probs'])
+            self.blip_cap.extend(batch['bg_description'])
             if batch['previous_contexts'] is not None:
                 self.prev_context.extend(batch['previous_contexts'])
 
@@ -377,6 +380,7 @@ class SLTLitModule(LightningModule):
                 tmp_dict['iou'] = iou[idx]
                 tmp_dict['precision'] = precision[idx]
                 tmp_dict['recall'] = recall[idx]
+                tmp_dict['blip_cap'] = self.blip_cap[idx]
                 if len(self.all_preds) > 1:
                     tmp_dict["pred_pls"] = self.all_preds[1][idx]
                     tmp_dict["bleurt_pls"] = bleurt_scores_pl[idx]

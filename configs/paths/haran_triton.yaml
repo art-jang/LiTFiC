@@ -35,3 +35,4 @@ lm_root: /scratch/shared/beegfs/haran/bobsl/t5_checkpoint/
 question_pool: ./data/question_pool.txt
 cslr2_ckpt: /scratch/shared/beegfs/haran/bobsl/cslr2/model_best.pth
 pl_dist_path: /users/haran/CSLR2_T/bobsl_vis/pl_dist.pkl
+blip_cap_path: /work/sign-language/data_from_craude/bobsl/captioning/blip2_captions.pkl
