@@ -40,6 +40,7 @@ class LanguageDecoder(nn.Module):
         self.decoder = AutoModelForCausalLM.from_pretrained(pretrained_llm, 
                                                             torch_dtype=torch_dtype,
                                                             **decoder_config)
+        self.torch_dtype = torch_dtype
 
         self.embed_tokens = self.decoder.model.embed_tokens
         self.lora = lora

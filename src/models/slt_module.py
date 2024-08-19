@@ -164,8 +164,9 @@ class SLTLitModule(LightningModule):
                 attn_masks = attn_masks.to(self.device)
             
             except:
-                feats = torch.zeros(bs, 1, 4096).to(self.device)
-                attn_masks = torch.zeros(bs, 1).to(self.device)
+                feats = torch.zeros(bs, 1, 4096).to(self.device, dtype=self.net.language_decoder.decoder.dtype)
+                attn_masks = torch.zeros(bs, 1).to(self.device, dtype=self.net.language_decoder.decoder.dtype)
+                
 
             target_indices = [dataset["target_indices"][idx] for _ in range(bs)]
             target_labels = [dataset["target_labels"][idx] for _ in range(bs)]
