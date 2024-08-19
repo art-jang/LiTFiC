@@ -4,6 +4,7 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import ipdb
 from peft import LoraConfig, get_peft_model
+import random
 
 
 class LanguageDecoder(nn.Module):
@@ -20,6 +21,8 @@ class LanguageDecoder(nn.Module):
                  lora = False,
                  use_pl_probs = False,
                  use_pl_w_feats = False,
+                 mix_in_pls = False,
+                 mix_in_pls_prob = 0.5,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -32,6 +35,7 @@ class LanguageDecoder(nn.Module):
         else:
             raise ValueError(f"Invalid precision: {precision}")
         
+        self.torch_dtype = torch_dtype
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_llm, **tokenizer_config)
         self.add_eos_token = True if os.path.basename(pretrained_llm) in ['Meta-Llama-3-8B', 'Meta-Llama-3-8B-Instruct'] else False
 
@@ -57,6 +61,8 @@ class LanguageDecoder(nn.Module):
         self.sub_sub = sub_sub
         self.use_pl_probs = use_pl_probs
         self.use_pl_w_feats = use_pl_w_feats
+        self.mix_in_pls = mix_in_pls
+        self.mix_in_pls_prob = mix_in_pls_prob
 
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
@@ -67,6 +73,7 @@ class LanguageDecoder(nn.Module):
     def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None):
 
         final_q = None
+        pl_switch = False
         if not self.oracle:
             
             if previous_contexts is not None:
@@ -83,7 +90,15 @@ class LanguageDecoder(nn.Module):
         
         else:
             if self.sub_sub:
-                pls = sub_gt
+                if self.training and self.mix_in_pls:
+                    rand = random.random()
+                    if rand > self.mix_in_pls_prob:
+                        pls = sub_gt
+                    else: 
+                        self.sub_sub = False
+                        pl_switch = True
+                else:
+                    pls = sub_gt
 
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
@@ -167,6 +182,9 @@ class LanguageDecoder(nn.Module):
             position_ids = position_ids.to(device)
             position_ids = position_ids[:, :-1]
 
+        if pl_switch:
+            self.sub_sub = True
+        
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
     def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None):
@@ -258,6 +276,7 @@ class LanguageDecoder(nn.Module):
             position_ids = attn_masks.cumsum(-1)-1
             position_ids.masked_fill_(attn_masks == 0, 1)
             position_ids = position_ids.to(device)
+        
 
         return inputs_embeds, attn_masks, position_ids
 

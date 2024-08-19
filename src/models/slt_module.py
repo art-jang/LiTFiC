@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from src.utils.gather_utils import strings_to_tensor, tensor_to_strings
 from src.utils.vis_utils import save_video
-from src.utils.ret_utils import copy_tensor, calculate_average_logit_scores, calculate_retrieval_metrics 
+from src.utils.ret_utils import copy_tensor, calculate_average_logit_scores, calculate_retrieval_metrics, calculate_overlap_metrics
 from bleurt_pytorch import BleurtConfig, BleurtForSequenceClassification, BleurtTokenizer
 
 
@@ -327,13 +327,20 @@ class SLTLitModule(LightningModule):
         rouge_score = self.rouge.compute_score(references, hypotheses)[0]
         cider_score = self.cider.compute_score(references, hypotheses)[0]
         bleurt_score = sum(self.get_bleurt_scores(all_gts, all_preds))/len(all_gts)
+        iou_list, precision_list, recall_list = calculate_overlap_metrics(all_gts, all_preds)
+        iou = sum(iou_list)/len(iou_list)
+        precision = sum(precision_list)/len(precision_list)
+        recall = sum(recall_list)/len(recall_list)
 
-        return bleu_score, rouge_score, cider_score, bleurt_score
+
+        return bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall
     
     def _eval(self) -> None:
         if self.global_rank == 0:
             hypotheses = {'image'+str(i): [self.all_preds[0][i]] for i in range(len(self.all_preds[0]))}
             references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
+
+            iou, precision, recall = calculate_overlap_metrics(self.all_gts, self.all_preds[0])
 
             _, rouge_scores  = self.rouge.compute_score(references, hypotheses)
 
@@ -343,6 +350,8 @@ class SLTLitModule(LightningModule):
 
                 hypotheses = {'image'+str(i): [self.all_preds[1][i]] for i in range(len(self.all_preds[1]))}
                 references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
+
+                iou_pl, precision_pl, recall_pl = calculate_overlap_metrics(self.all_gts, self.all_preds[1])
 
                 _, rouge_scores_pl  = self.rouge.compute_score(references, hypotheses)
 
@@ -364,10 +373,16 @@ class SLTLitModule(LightningModule):
                 tmp_dict['sub_gt'] = self.sub_gts[idx]
                 tmp_dict['bleurt'] = bleurt_scores[idx]
                 tmp_dict['prob'] = self.probs[idx]
+                tmp_dict['iou'] = iou[idx]
+                tmp_dict['precision'] = precision[idx]
+                tmp_dict['recall'] = recall[idx]
                 if len(self.all_preds) > 1:
                     tmp_dict["pred_pls"] = self.all_preds[1][idx]
                     tmp_dict["bleurt_pls"] = bleurt_scores_pl[idx]
                     tmp_dict["rouge_pls"] = rouge_scores_pl[idx]
+                    tmp_dict["iou_pls"] = iou_pl[idx]
+                    tmp_dict["precision_pls"] = precision_pl[idx]
+                    tmp_dict["recall_pls"] = recall_pl[idx]
 
                 if len(self.prev_context) > 0:
                     tmp_dict['prev_contexts'] = self.prev_context[idx] 
@@ -381,17 +396,23 @@ class SLTLitModule(LightningModule):
 
 
         for idx_p in range(len(self.all_preds)):
-            bleu_score, rouge_score, cider_score, bleurt_score = self.get_cap_metrics(idx_p)
+            bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall = self.get_cap_metrics(idx_p)
             if len(self.all_preds) > 1:
                 self.log(f"bleu_{idx_p}", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
                 self.log(f"rouge_{idx_p}", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
                 self.log(f"cider_{idx_p}", cider_score, on_step=False, on_epoch=True, prog_bar=True)
                 self.log(f"bleurt_{idx_p}", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"iou_{idx_p}", iou, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"precision_{idx_p}", precision, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"recall_{idx_p}", recall, on_step=False, on_epoch=True, prog_bar=True)
             else:
                 self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
                 self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
                 self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
                 self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("iou", iou, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("precision", precision, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("recall", recall, on_step=False, on_epoch=True, prog_bar=True)
 
         ret_metrics_list = None
         # if not self.trainer.sanity_checking:
