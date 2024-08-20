@@ -1,6 +1,22 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from collections import defaultdict
+
+def compress_and_average(strings, numbers):
+    # Step 2: Create a dictionary to collect numbers associated with each string
+    data = defaultdict(list)
+    for string, number in zip(strings, numbers):
+        data[string].append(number)
+    
+    # Step 3: Calculate the average for each string
+    averages = {key: sum(values) / len(values) for key, values in data.items()}
+    
+    # Convert the dictionary to two lists
+    compressed_strings = list(averages.keys())
+    compressed_averages = list(averages.values())
+    
+    return compressed_strings, compressed_averages
 
 
 def load_checkpoint_model(
