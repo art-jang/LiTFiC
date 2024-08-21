@@ -325,7 +325,7 @@ class LanguageDecoder(nn.Module):
             
         if self.oracle and self.sub_sub and not self.training:
             self.sub_sub = False
-            outputs, labels, gen_sentences = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, rec_prev=rec_prev)
+            outputs, labels, gen_sentences = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev)
             self.sub_sub = True
             outputs_list.append(outputs)
             labels_list.append(labels)
@@ -337,7 +337,7 @@ class LanguageDecoder(nn.Module):
 
 
     def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None):
-        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs)
+        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:
             gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev)
