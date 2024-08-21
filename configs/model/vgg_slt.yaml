@@ -39,7 +39,7 @@ net:
       depth: 2
     cslr2_options:
       use: True
-      ckpt_path: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
+      ckpt_path: ${paths.cslr2_ckpt}
       freeze: True
   llm_config:
     pretrained_llm: ${paths.llm_root}
@@ -48,6 +48,13 @@ net:
     oracle: True
     lora: True
     sub_sub: True
+    use_pl_probs: False
+    use_pl_w_feats: False
+    mix_in_pls: False
+    mix_in_pls_prob: 0.5
+    bg_desc: False
+    use_bg_w_sub: False
+    use_rec_prev: False
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16

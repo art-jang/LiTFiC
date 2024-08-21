@@ -15,6 +15,7 @@ from torch.nn.utils.rnn import pad_sequence
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
 from src.utils.data_utils import sample_sub
+from src.utils.cslr_tools import compress_and_average
 
 class Sentences(Dataset):
     """General dataset class to load sentences from data files"""
@@ -57,6 +58,10 @@ class Sentences(Dataset):
         word_embds_pkl: Optional[str] = None,
         verbose: bool = False,
         sub_sample_shuffle: Optional[str] = True,
+        sub_sample_pct: Optional[float] = 1.0,
+        sub_sample_replace: Optional[bool] = False,
+        pl_dist_path: Optional[str] = None,
+        blip_cap_path: Optional[str] = None,
     ):
         """
         Args:
@@ -121,6 +126,7 @@ class Sentences(Dataset):
             text_augmentations=text_augmentations,
             fps=fps,
             verbose=verbose,
+            blip_cap_path=blip_cap_path,
         )
         
         # features
@@ -178,7 +184,14 @@ class Sentences(Dataset):
             assert word_embds_pkl is not None, msg
             self.word_embds = pickle.load(open(word_embds_pkl, "rb"))
         
-        self.sub_sample_shuffle = sub_sample_shuffle
+        self.sub_sample_shuffle = True if setname == "train" else False
+        self.sub_sample_pct = sub_sample_pct
+        self.sub_sample_replace = sub_sample_replace
+
+        self.pl_dist = None
+        if pl_dist_path is not None:
+            self.pl_dist = pickle.load(open(pl_dist_path, "rb"))
+        
 
 
     def fix_synonyms_dict(self) -> None:
@@ -247,6 +260,7 @@ class Sentences(Dataset):
         sub_end: float,
         previous_context: Optional[str] = None,
         question: Optional[str] = None,
+        bg_description: Optional[str] = None,
     ) -> dict:
         """Loads single item based on subtitle and video name"""
         if self.skip_mode.value:
@@ -262,6 +276,7 @@ class Sentences(Dataset):
                 "sub_end": sub_end,
                 "previous_context": previous_context,
                 "question": question,
+                "bg_description": bg_description,
             }
         feats = None
         if self.features is not None:
@@ -317,7 +332,7 @@ class Sentences(Dataset):
                 # convert annotation_idx to feature_idx
                 correct_annotation_idx = int(
                     annotation_idx * self.pseudo_label.lmdb_stride / \
-                        (self.features.lmdb_stride * self.pseudo_label.load_stride)
+                        (2 * self.pseudo_label.load_stride)
                 )
                 if prob >= self.pl_filter and annotation_idx in min_count_indices:
                     # only keep annotations with
@@ -340,6 +355,9 @@ class Sentences(Dataset):
             # video augmentation
             probs = [p[0].item() for p in probs]
             pls = [self.inverted_vocab[x[0]] for x in list(target_dict.values())]
+
+            pls, probs = compress_and_average(pls, probs)
+            
             if self.video_augmentations is not None:
                 feats, kept_indices = self.video_augmentations(feats)
                 if self.pseudo_label is not None:
@@ -383,8 +401,9 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
-            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle),
+            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist),
             "probs": probs if self.pseudo_label is not None else None,
+            "bg_description": bg_description,
         }
 
         '''
@@ -409,7 +428,8 @@ class Sentences(Dataset):
                                     sub_start=sub_starts,
                                     sub_end=sub_ends,
                                     previous_context=subtitles["previous_context"],
-                                    question=subtitles["question"],)
+                                    question=subtitles["question"],
+                                    bg_description=subtitles["bg_description"])
 
 
 def pad_tensors_and_create_attention_masks(tensor_list, padding_side='right'):
@@ -460,8 +480,11 @@ def collate_fn_padd_t(batch: List):
     video_names = [item["video_name"] for item in batch]
     sub_gt = [item["sub_gt"] for item in batch]
     probs = [item["probs"] for item in batch]
+    bg_description = [item["bg_description"] for item in batch]
 
-    padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
+    padded_features, attn_masks = None, None
+    if features[0] is not None:
+        padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
 
     return {
         "features": padded_features,
@@ -476,7 +499,8 @@ def collate_fn_padd_t(batch: List):
         "end": end,
         "video_names": video_names,
         "sub_gt": sub_gt,
-        "probs": probs
+        "probs": probs,
+        "bg_description": bg_description
     }
 
 

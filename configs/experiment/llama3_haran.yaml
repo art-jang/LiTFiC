@@ -24,10 +24,7 @@ trainer:
 
 data:
   batch_size: 2
-  num_workers: 1
-
-paths:
-  llm_root: ../hf/Meta-Llama-3-8B
+  num_workers: 8
 
 model:
   net:

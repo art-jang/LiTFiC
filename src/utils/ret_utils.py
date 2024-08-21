@@ -2,7 +2,7 @@ import numpy as np
 
 def calculate_retrieval_metrics(retrieval_matrix, k_list= [1, 5, 10, 25, 50]):
     """
-    Calculate retrieval metrics including recall at different cutoffs and mean/median rank.
+    Calculate retrieval metrics including recall at different cutoffs and mean/median rank. ddd
     
     Args:
     retrieval_matrix (list of lists): Retrieval matrix where each sublist contains n values.
@@ -81,3 +81,30 @@ def copy_tensor(tensor, n):
         expanded_tensor = tensor.unsqueeze(0)
         expanded_tensor = expanded_tensor.expand(n, *tensor.shape)
         return expanded_tensor
+
+
+def calculate_overlap_metrics(gt, pred):
+    iou_list = []
+    precision_list = []
+    recall_list = []
+    
+    for gt_sent, pred_sent in zip(gt, pred):
+        # Split sentences into words
+        gt_words = set(gt_sent.split())
+        pred_words = set(pred_sent.split())
+        
+        # Calculate intersection and union
+        intersection = gt_words.intersection(pred_words)
+        union = gt_words.union(pred_words)
+        
+        # Calculate metrics
+        iou = len(intersection) / len(union) if len(union) > 0 else 0
+        precision = len(intersection) / len(pred_words) if len(pred_words) > 0 else 0
+        recall = len(intersection) / len(gt_words) if len(gt_words) > 0 else 0
+        
+        # Append metrics to lists
+        iou_list.append(iou)
+        precision_list.append(precision)
+        recall_list.append(recall)
+    
+    return iou_list, precision_list, recall_list

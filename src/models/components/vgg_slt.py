@@ -46,10 +46,25 @@ class VggSLTNet(nn.Module):
         target_labels = batch["target_labels"]
         pls = batch["pls"]
         sub_gt = batch["sub_gt"]
+        probs = batch["probs"]
 
-        # x = self.visual_encoder(x, masks)        
-        x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
-    
+        try:
+            rec_prev = batch["rec_prev"]
+        except:
+            rec_prev = []
+
+        background_description = batch["bg_description"]
+
+        # x = self.visual_encoder(x, masks)
+        if self.load_features:        
+            x, masks = self.mm_projector(x, masks=masks, target_indices=target_indices, target_labels=target_labels)
+        else:
+            x = torch.zeros(len(pls), 1, 4096).to(self.language_decoder.decoder.device, dtype=self.language_decoder.torch_dtype)
+            masks = torch.zeros(len(pls), 1).to(self.language_decoder.decoder.device, dtype=self.language_decoder.torch_dtype)
+        
+        x = x.to(self.language_decoder.torch_dtype)
+        masks = masks.to(self.language_decoder.torch_dtype)
+
         outputs, labels, gen_sentences = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,
@@ -57,7 +72,10 @@ class VggSLTNet(nn.Module):
                                                 previous_contexts=previous_contexts,
                                                 pls=pls,
                                                 sub_gt=sub_gt,
-                                                ret=ret)
+                                                probs=probs,
+                                                ret=ret,
+                                                background_description=background_description,
+                                                rec_prev=rec_prev)
         return outputs, labels, gen_sentences
 
 

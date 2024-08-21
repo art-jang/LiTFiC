@@ -29,7 +29,11 @@ synonyms_pkl: /storage/haran/bobsl/syns/synonym_pickle_english_and_signdict_and_
 rgb_frames: /storage/haran/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
 misaligned_csv_root: /storage/haran/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
 heuristic_aligned_csv_root: /storage/haran/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
-llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
+llm_root: meta-llama/Meta-Llama-3-8B
 lm_root: null
 bleurt_path: lucadiliello/BLEURT-20
 question_pool: ./data/question_pool.txt
+cslr2_ckpt: model_best.pth
+pl_dist_path: pl_dist.pkl
+blip_cap_path: blip2_captions.pkl
+val_episode_ind_path: val_start_indices.json

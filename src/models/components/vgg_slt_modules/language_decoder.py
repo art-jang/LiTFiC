@@ -4,6 +4,7 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import ipdb
 from peft import LoraConfig, get_peft_model
+import random
 
 
 class LanguageDecoder(nn.Module):
@@ -18,6 +19,13 @@ class LanguageDecoder(nn.Module):
                  oracle=False,
                  sub_sub = False,
                  lora = False,
+                 use_pl_probs = False,
+                 use_pl_w_feats = False,
+                 mix_in_pls = False,
+                 mix_in_pls_prob = 0.5,
+                 bg_desc = False,
+                 use_bg_w_sub = False,
+                 use_rec_prev = False,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -30,6 +38,7 @@ class LanguageDecoder(nn.Module):
         else:
             raise ValueError(f"Invalid precision: {precision}")
         
+        self.torch_dtype = torch_dtype
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_llm, **tokenizer_config)
         self.add_eos_token = True if os.path.basename(pretrained_llm) in ['Meta-Llama-3-8B', 'Meta-Llama-3-8B-Instruct'] else False
 
@@ -38,6 +47,7 @@ class LanguageDecoder(nn.Module):
         self.decoder = AutoModelForCausalLM.from_pretrained(pretrained_llm, 
                                                             torch_dtype=torch_dtype,
                                                             **decoder_config)
+        self.torch_dtype = torch_dtype
 
         self.embed_tokens = self.decoder.model.embed_tokens
         self.lora = lora
@@ -53,6 +63,13 @@ class LanguageDecoder(nn.Module):
         
         self.oracle = oracle
         self.sub_sub = sub_sub
+        self.use_pl_probs = use_pl_probs
+        self.use_pl_w_feats = use_pl_w_feats
+        self.mix_in_pls = mix_in_pls
+        self.mix_in_pls_prob = mix_in_pls_prob
+        self.bg_desc = bg_desc
+        self.use_bg_w_sub = use_bg_w_sub
+        self.use_rec_prev = use_rec_prev
 
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
@@ -60,25 +77,64 @@ class LanguageDecoder(nn.Module):
             input_ids = torch.cat([input_ids, torch.LongTensor([self.tokenizer.eos_token_id]).to(device)], dim=0)
         return input_ids
     
-    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None):
-        if previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
-                         else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
+    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None, background_description=None):
+
+        final_q = None
+        pl_switch = False
+        if not self.oracle:
+            
+            if previous_contexts is not None:
+                questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
+                            else q for q, c in zip(questions, previous_contexts)]
+            
+            if self.use_pl_w_feats:
+                questions = [q + 'The following are some possible words present in the sentence: ' + " ".join(pl) for q, pl in zip(questions, pls)]
+                if self.use_pl_probs:
+                    questions = [q + 'The confidences for the previous words are: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
+            
+            if self.bg_desc:
+                questions = [q + '. Description of the background is: ' + b for q, b in zip(questions, background_description)]
+            
+            questions = [q + ". The following are the video tokens: " for q in questions]
+            final_q = ["\nGenerated Sentence: " for _ in questions]
         
-        if self.sub_sub:
-            pls = sub_gt
-        
-        if self.oracle:
+        else:
+            if self.sub_sub:
+                if self.training and self.mix_in_pls:
+                    rand = random.random()
+                    if rand > self.mix_in_pls_prob:
+                        pls = sub_gt
+                    else: 
+                        self.sub_sub = False
+                        pl_switch = True
+                else:
+                    pls = sub_gt
+
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
-                            "Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+                            "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            if self.use_pl_probs and not self.sub_sub:
+                system_prompt +=  "3. The user may provide a list probabilities for each word. You can use these probabilities to generate the sentence.\n"
+
             questions = [system_prompt for q in questions]
+
+            if previous_contexts is not None:
+                questions = [q + 'The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
+
+            questions = [q + 'The word list is: ' + " ".join(pl) for q, pl in zip(questions, pls)]
         
-        if self.oracle and previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' + ", ".join(list(set(pl))) + ". The sentence is: " for q, pl, c in zip(questions, pls, previous_contexts)]
+            if self.use_pl_probs and not self.sub_sub:
+                questions = [q + '. The probabilities are: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
+
+            if self.bg_desc:
+                if self.sub_sub:
+                    if self.use_bg_w_sub:
+                        questions = [q + '. Description of the background is: ' + b for q, b in zip(questions, background_description)]
+                else:
+                    questions = [q + '. Description of the background is: ' + b for q, b in zip(questions, background_description)]
+            
+            questions = [q + '\nGenerated Sentence: ' for q in questions]
         
-        if self.oracle:
-            questions = [q + 'And the word list is as follows: ' + " ".join(list(set(pl))) + "\nGenerated Sentence: " for q, pl in zip(questions, pls)]
 
         max_len = 0
         labels = []
@@ -90,6 +146,10 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.embed_tokens(cur_q)
+
+                if final_q is not None:
+                    cur_final_q = self._tokenize(final_q[i], device=device)[:-1]
+                    cur_final_q_embed = self.embed_tokens(cur_final_q)
                 
             cur_s_embed = self.embed_tokens(cur_s)
 
@@ -97,8 +157,12 @@ class LanguageDecoder(nn.Module):
                 cur_embed = torch.cat([cur_q_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
                 cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
             elif questions is not None:
-                cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
-                cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
+                if final_q is not None:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed, cur_s_embed], dim=0)
+                    cur_label = cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed)+len(cur_final_q_embed))).to(device), cur_s], dim=0)
+                else:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
+                    cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
             else:
                 # add bos token embedding to the seqymces and the bos token to the labels
                 cur_v_embed = torch.cat([self.embed_tokens(torch.LongTensor([self.tokenizer.bos_token_id]).to(device)), cur_v_embed], dim=0)
@@ -135,27 +199,64 @@ class LanguageDecoder(nn.Module):
             position_ids = position_ids.to(device)
             position_ids = position_ids[:, :-1]
 
+        if pl_switch:
+            self.sub_sub = True
+        
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
-    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None):
-        if previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' \
-                         else q + ' And the given word list is as follows: '  for q, c in zip(questions, previous_contexts)]
+    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None, background_description = None, rec_prev=None):
+
+        final_q = None
+        if self.use_rec_prev and not self.sub_sub:
+            rec_prev = [". ".join(r) + "." if len(r) > 0 else '' for r in rec_prev]
+            previous_contexts = rec_prev        
         
-        if self.sub_sub:
-            pls = sub_gt
+        if not self.oracle:
+
+            if previous_contexts is not None :
+                questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' if c != '' and len(c) != 0 \
+                            else q for q, c in zip(questions, previous_contexts)]
+            
+            if self.use_pl_w_feats:
+                questions = [q + 'The following are some possible words present in the sentence: ' + ", ".join(pl) for q, pl in zip(questions, pls)]
+                if self.use_pl_probs:
+                    questions = [q + '. The confidences for the previous words are: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
+            
+            if self.bg_desc:
+                questions = [q + '. Description of the background is: ' + b for q, b in zip(questions, background_description)]
+            
+            questions = [q + ". The following are the video tokens: " for q in questions]
+            final_q = ["\nGenerated Sentence: " for _ in questions]
         
-        if self.oracle:
+        else:
+            if self.sub_sub:
+                pls = sub_gt
+                
             system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
                             "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
-                            "Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+                            "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            if self.use_pl_probs and not self.sub_sub:
+                system_prompt +=  "3. The user may provide a list probabilities for each word. You can use these probabilities to generate the sentence.\n"
+
             questions = [system_prompt for q in questions]
+
+            if previous_contexts is not None:
+                questions = [q + ' The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
         
-        if self.oracle and previous_contexts is not None:
-            questions = [q + ' The previous context is the following: ' + c + ' And the given word list is as follows: ' + ", ".join(list(set(pl))) + ". The sentence is: " for q, pl, c in zip(questions, pls, previous_contexts)]
+            questions = [q + 'The word list is: ' + " ".join(pl) for q, pl in zip(questions, pls)]
         
-        if self.oracle:
-            questions = [q + 'And the word list is as follows: ' + " ".join(list(set(pl))) + "\nGenerated Sentence: " for q, pl in zip(questions, pls)]
+            if self.use_pl_probs and not self.sub_sub:
+                questions = [q + 'The probabilities are: ' + ", ".join([f"{p:.2f}" for p in pl]) for q, pl in zip(questions, probs)]
+            
+            if self.bg_desc:
+                if self.sub_sub:
+                    if self.use_bg_w_sub:
+                        questions = [q + '. Description of the background is: ' + b for q, b in zip(questions, background_description)]
+                else:
+                    questions = [q + '. Description of the background is: ' + b for q, b in zip(questions, background_description)]
+            
+            questions = [q + '\nGenerated Sentence: ' for q in questions]
+        
 
         max_len = 0
         inputs_embeds = []
@@ -165,8 +266,16 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.embed_tokens(cur_q)
+
+                if final_q is not None:
+                    cur_final_q = self._tokenize(final_q[i], device=device)[:-1]
+                    cur_final_q_embed = self.embed_tokens(cur_final_q)
+
             if questions is not None:
-                cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]            
+                if final_q is not None:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed], dim=0)
+                else:
+                    cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]            
             else:
                 cur_v_embed = torch.cat([self.embed_tokens(torch.LongTensor([self.tokenizer.bos_token_id]).to(device)), cur_v_embed], dim=0)
                 cur_embed = cur_v_embed
@@ -198,21 +307,47 @@ class LanguageDecoder(nn.Module):
             position_ids = attn_masks.cumsum(-1)-1
             position_ids.masked_fill_(attn_masks == 0, 1)
             position_ids = position_ids.to(device)
+        
 
         return inputs_embeds, attn_masks, position_ids
 
-    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, ret = False):
-        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
+    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None):
+        outputs_list = []
+        gen_sentences_list = None
+        labels_list = []
+
+        outputs, labels, gen_sentences = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev)    
+        outputs_list.append(outputs)
+        labels_list.append(labels)
+
+        if gen_sentences is not None:
+            gen_sentences_list = [gen_sentences]
+            
+        if self.oracle and self.sub_sub and not self.training:
+            self.sub_sub = False
+            outputs, labels, gen_sentences = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, rec_prev=rec_prev)
+            self.sub_sub = True
+            outputs_list.append(outputs)
+            labels_list.append(labels)
+            if gen_sentences_list is not None:
+                gen_sentences_list.append(gen_sentences)
+
+        
+        return outputs_list, labels_list, gen_sentences_list
+
+
+    def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None):
+        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:
-            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt)
+            gen_sentences = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev)
         else:
             gen_sentences = None
             
         return outputs, labels, gen_sentences
     
-    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None):
-        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt)
+    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, background_description=None, rec_prev=None):
+        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id)
         
         return outputs

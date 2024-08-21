@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Callable
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset, Subset
 import torch
+import json
 
 
 class SLTDataModule(LightningDataModule):
@@ -15,7 +16,8 @@ class SLTDataModule(LightningDataModule):
         collate_fn: Optional[str] = None,
         eval_data_size: int = 1000,
         ret_data_size: int = 500,
-        train_data_fraction: int = 1.0
+        train_data_fraction: int = 1.0,
+        val_episode_ind_path: Optional[str] = None,
     ) -> None:
         super().__init__()
 
@@ -30,6 +32,10 @@ class SLTDataModule(LightningDataModule):
         self.eval_data_size = eval_data_size
         self.train_data_fraction = train_data_fraction
         self.ret_data_size = ret_data_size
+
+        self.val_episode_ind = None
+        with open(val_episode_ind_path, 'r') as f:
+            self.val_episode_ind = json.load(f)
 
     def setup(self, stage: Optional[str] = None) -> None:
         if self.trainer is not None:
@@ -48,8 +54,8 @@ class SLTDataModule(LightningDataModule):
                                 )
                 self.data_test = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
                 len(self.data_val))[:self.eval_data_size])
-                self.data_val = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
-                len(self.data_val))[:self.eval_data_size])
+                # self.data_val = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
+                # len(self.data_val))[:self.eval_data_size])
 
                 self.data_train = Subset(
                                     self.data_train,
@@ -90,9 +96,30 @@ class SLTDataModule(LightningDataModule):
 
         :return: The validation dataloader.
         """
+
+        rank = torch.distributed.get_rank()
+        world_size = torch.distributed.get_world_size()
+
+        total_episodes = len(self.val_episode_ind["idx"])
+        episodes_per_gpu = total_episodes // world_size
+        start_index = episodes_per_gpu * rank
+        end_index = start_index + episodes_per_gpu if rank != world_size - 1 else total_episodes
+
+        # Get the actual dataset indices
+
+        dataset_start_idx = self.val_episode_ind["idx"][start_index]
+
+        if self.eval_data_size > 0:
+            dataset_end_idx = dataset_start_idx + self.eval_data_size // world_size
+        else:
+            dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.val_dataset)
+
+
+        dataset = Subset(self.val_dataset, range(dataset_start_idx, dataset_end_idx))
+
         return DataLoader(
-            dataset=self.data_val,
-            batch_size=self.batch_size_per_device,
+            dataset=dataset,
+            batch_size=1,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,

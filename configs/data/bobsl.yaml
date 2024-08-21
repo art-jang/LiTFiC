@@ -6,7 +6,8 @@ collate_fn: src.data.components.sentence.collate_fn_padd_t
 dataset: bobsl
 eval_data_size: 832
 train_data_fraction: 1.0
-ret_data_size: 500
+ret_data_size: 100
+val_episode_ind_path: ${paths.val_episode_ind_path} 
 dataset_config:
   # general parameters to load sentences associated to subtitles
   subset2episode: ${paths.subset2episode}
@@ -53,3 +54,7 @@ dataset_config:
   # other parameters
   verbose: False
   sub_sample_shuffle: False 
+  sub_sample_pct: 0.5
+  sub_sample_replace: False
+  pl_dist_path: ${paths.pl_dist_path}
+  blip_cap_path: ${paths.blip_cap_path}
