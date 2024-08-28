@@ -25,7 +25,7 @@ def sample_pls(data, num_samples):
     return sampled_words
 
 
-def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None):
+def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None, drop_stopwords=False):
     words = sentence.split()
 
     words = [word.strip(string.punctuation).lower() for word in words]
@@ -46,21 +46,24 @@ def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None):
                 'i', 'after', 'few', 'whom', 't', 'being', 'if', 'theirs', 'my', 'against', 'a',
                 'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
             }
-    filtered_words = [word for word in words if word not in stop_words]
 
-    if not shuffle and pct == 1.0:
-        if len(filtered_words) == 0:
-            return words
-        return filtered_words
+    if drop_stopwords:
+        filtered_words = [word for word in words if word not in stop_words]
+    else:
+        filtered_words = words
             
     if len(filtered_words) == 0:
-        # If there are only stop words, use the original sentence
-        num_words_to_keep = math.ceil(len(words) * 1)
+        num_words_to_keep = len(words)
         selected_words = random.sample(words, num_words_to_keep)
     else:
-        # Calculate pct% of the remaining words, rounding up
-        num_words_to_keep = math.ceil(len(filtered_words) * pct)
-        selected_words = random.sample(filtered_words, num_words_to_keep)
+        if shuffle:
+            num_words_to_keep = math.ceil(len(filtered_words) * pct)
+            selected_words = random.sample(filtered_words, num_words_to_keep)
+        else:
+            randIndex = random.sample(range(len(filtered_words)), math.ceil(len(filtered_words) * pct))
+            randIndex.sort()
+            selected_words = [filtered_words[i] for i in randIndex]
+    
     
     if replace and pl_dist is not None and len(filtered_words) > 0:
         if len(filtered_words) - num_words_to_keep > 0:

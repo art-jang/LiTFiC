@@ -11,7 +11,8 @@ def find_json_files(parent_folder):
     for root, _, files in os.walk(parent_folder):
         for file in files:
             if file.endswith('.json'):
-                json_files.append(os.path.join(root, file))
+                if file.split('_')[0] != 'cap':
+                    json_files.append(os.path.join(root, file))
     return json_files
 
 def process_json_files(parent_folder):
@@ -22,7 +23,7 @@ def process_json_files(parent_folder):
         with open(json_file_path, 'r') as file:
             data = json.load(file)
 
-        first_50_items = data[:50]
+        first_50_items = data[:30]
         
         # Iterate through the list in the JSON file
         for idx, element in tqdm(enumerate(first_50_items)):
@@ -39,7 +40,7 @@ def process_json_files(parent_folder):
 
 # Example usage
 
-parent_folder = 'logs/llama_sub1_s_prev1/runs/2024-08-06_00-01-06/vis/'
+parent_folder = 'logs/llama3_feats_rp/runs/2024-08-23_19-07-22/vis/'
 rgb_lmdb_env = lmdb.open(
                 "../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/", readonly=True, lock=False, max_readers=512
             )

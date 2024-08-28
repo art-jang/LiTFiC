@@ -110,12 +110,12 @@ class SLTDataModule(LightningDataModule):
         dataset_start_idx = self.val_episode_ind["idx"][start_index]
 
         if self.eval_data_size > 0:
-            dataset_end_idx = dataset_start_idx + self.eval_data_size // world_size
+            dataset_end_idx = dataset_start_idx + (self.eval_data_size // world_size)
         else:
-            dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.val_dataset)
+            dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.dat_val)
 
 
-        dataset = Subset(self.val_dataset, range(dataset_start_idx, dataset_end_idx))
+        dataset = Subset(self.data_val, range(dataset_start_idx, dataset_end_idx))
 
         return DataLoader(
             dataset=dataset,

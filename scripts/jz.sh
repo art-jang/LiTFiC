@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llama31_feat_bg        # job name
+#SBATCH --job-name=llama_feats_bg_exp      # job name
 #SBATCH --account=ewl@a100                # project code
 #SBATCH -C a100
 #SBATC -C v100-32g                       # to choose nodes with 32G GPU memory (i.e. gpu_p1)
@@ -28,17 +28,21 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 
-srun python src/train.py task_name=llama3_feat_bg experiment=llama3_haran paths=haran \
+srun python src/train.py task_name=llama3_feat_bg_v2 experiment=llama3_haran paths=haran \
     data.dataset_config.max_previous_sentences=0\
-    data.dataset_config.sub_sample_pct=1.0\
+    data.dataset_config.sub_sample_pct=0.25\
+    data.dataset_config.drop_stopwords=True\
     model.net.llm_config.sub_sub=False\
     model.net.llm_config.use_pl_probs=False\
     model.net.llm_config.oracle=False\
     model.net.llm_config.use_pl_w_feats=False\
     model.net.llm_config.mix_in_pls=False\
     model.net.llm_config.lora=True\
+    model.net.mm_projector_config.cslr2_options.freeze=True\
     model.net.llm_config.bg_desc=True\
+    model.net.llm_config.use_rec_prev=False\
+    model.context_len=1\
     model.net.llm_config.mix_in_pls_prob=0.25\
-    data.dataset_config.sub_sample_replace=False\
+    data.dataset_config.sub_sample_replace=False
 
     

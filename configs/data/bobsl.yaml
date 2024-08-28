@@ -56,5 +56,7 @@ dataset_config:
   sub_sample_shuffle: False 
   sub_sample_pct: 0.5
   sub_sample_replace: False
+  drop_stopwords: False
   pl_dist_path: ${paths.pl_dist_path}
   blip_cap_path: ${paths.blip_cap_path}
+  filter_blip: True

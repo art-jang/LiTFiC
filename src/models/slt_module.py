@@ -101,6 +101,7 @@ class SLTLitModule(LightningModule):
         self.cider = Cider()
 
         self.all_preds=[]
+        self.avg_confs=[] 
         self.all_gts = []
         self.pls = []
         self.starts = []
@@ -111,10 +112,14 @@ class SLTLitModule(LightningModule):
         self.blip_cap = []
         self.probs = []
         self.rec_prev = []
+        self.rec_prev_conf = []
 
         self.context_len = context_len
         self.context_buffer = CircularBuffer(context_len)
         self.context_buffer.ep = None
+
+        self.context_conf_buffer = CircularBuffer(context_len)
+        self.context_conf_buffer.ep = None 
 
         self.ret_dataloader = None
         self.rgb_lmdb_env = None
@@ -203,7 +208,7 @@ class SLTLitModule(LightningModule):
                         "bg_description": bg_description
                 }
                 with torch.no_grad():
-                    outputs_list, labels_list, _ = self.forward(tmp_batch, ret=True)
+                    outputs_list, labels_list, _, _ = self.forward(tmp_batch, ret=True)
 
                     if len(score_row) == 0:
                         for _ in range(len(outputs_list)):
@@ -276,22 +281,26 @@ class SLTLitModule(LightningModule):
             elif self.context_buffer.ep != batch["video_names"][0]:
                 self.context_buffer.clear()
             batch["rec_prev"] = [self.context_buffer.get_all_elements()]
+            batch["rec_prev_conf"] = [self.context_conf_buffer.get_all_elements()]
 
-        outputs_list, labels_list, preds_list = self.forward(batch)
+        outputs_list, labels_list, preds_list, avg_conf_list = self.forward(batch)
 
         if len(self.all_preds) == 0 and preds_list is not None:
             self.all_preds = [[] for _ in range(len(preds_list))]
+            self.avg_confs = [[] for _ in range(len(preds_list))]
         
         loss = self.criterion(outputs_list[0], labels_list[0])
         
 
         if preds_list is not None:
             for idx_p, preds in enumerate(preds_list):
-                for _, pred in enumerate(preds):
+                for ip, pred in enumerate(preds):
                     decoded_pred = self.net.language_decoder.tokenizer.decode(pred, skip_special_tokens=True)
                     self.all_preds[idx_p].append(decoded_pred)
-                    if len(self.all_preds) > 1 or idx_p == 1:
+                    self.avg_confs[idx_p].append(avg_conf_list[idx_p][ip])
+                    if len(self.all_preds) == 1 or idx_p == 1:
                         self.context_buffer.append(decoded_pred)
+                        self.context_conf_buffer.append(avg_conf_list[idx_p][ip])
                 
             self.all_gts.extend(batch["subtitles"])
             self.pls.extend(batch['pls'])
@@ -302,6 +311,7 @@ class SLTLitModule(LightningModule):
             self.probs.extend(batch['probs'])
             self.blip_cap.extend(batch['bg_description'])
             self.rec_prev.extend(batch['rec_prev'])
+            self.rec_prev_conf.extend(batch['rec_prev_conf'])
             if batch['previous_contexts'] is not None:
                 self.prev_context.extend(batch['previous_contexts'])
 
@@ -353,6 +363,14 @@ class SLTLitModule(LightningModule):
         precision = sum(precision_list)/len(precision_list)
         recall = sum(recall_list)/len(recall_list)
 
+        if self.global_rank == 0:
+            cap_dict = {
+                "gt": all_gts,
+                "pred": all_preds,
+            }
+            with open(f"{self.vis_dir}/{self.current_epoch}/cap_{idx}.json", 'w') as f:
+                json.dump(cap_dict, f)
+
 
         return bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall
     
@@ -390,6 +408,7 @@ class SLTLitModule(LightningModule):
                 tmp_dict['end'] = self.ends[idx]
                 tmp_dict['gt'] = self.all_gts[idx]
                 tmp_dict['pred'] = self.all_preds[0][idx]
+                tmp_dict['conf'] = self.avg_confs[0][idx]
                 tmp_dict['pls'] = self.pls[idx]
                 tmp_dict['sub_gt'] = self.sub_gts[idx]
                 tmp_dict['bleurt'] = bleurt_scores[idx]
@@ -398,8 +417,11 @@ class SLTLitModule(LightningModule):
                 tmp_dict['precision'] = precision[idx]
                 tmp_dict['recall'] = recall[idx]
                 tmp_dict['blip_cap'] = self.blip_cap[idx]
+                tmp_dict['rec_prev'] = self.rec_prev[idx]
+                tmp_dict['rec_prev_conf'] = self.rec_prev_conf[idx]
                 if len(self.all_preds) > 1:
                     tmp_dict["pred_pls"] = self.all_preds[1][idx]
+                    tmp_dict["conf_pls"] = self.avg_confs[1][idx]
                     tmp_dict["bleurt_pls"] = bleurt_scores_pl[idx]
                     tmp_dict["rouge_pls"] = rouge_scores_pl[idx]
                     tmp_dict["iou_pls"] = iou_pl[idx]
@@ -470,7 +492,9 @@ class SLTLitModule(LightningModule):
         self.blip_cap = []
         self.probs = []
         self.rec_prev = []
+        self.rec_prev_conf = []
         self.context_buffer.clear() # log the rec_prev_context
+        self.context_conf_buffer.clear()
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.

@@ -62,6 +62,8 @@ class Sentences(Dataset):
         sub_sample_replace: Optional[bool] = False,
         pl_dist_path: Optional[str] = None,
         blip_cap_path: Optional[str] = None,
+        filter_blip: Optional[bool] = False,
+        drop_stopwords: Optional[bool] = False,
     ):
         """
         Args:
@@ -127,6 +129,7 @@ class Sentences(Dataset):
             fps=fps,
             verbose=verbose,
             blip_cap_path=blip_cap_path,
+            filter_blip=filter_blip,
         )
         
         # features
@@ -187,6 +190,7 @@ class Sentences(Dataset):
         self.sub_sample_shuffle = True if setname == "train" else False
         self.sub_sample_pct = sub_sample_pct
         self.sub_sample_replace = sub_sample_replace
+        self.drop_stopwords = drop_stopwords
 
         self.pl_dist = None
         if pl_dist_path is not None:
@@ -401,7 +405,7 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
-            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist),
+            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist, self.drop_stopwords),
             "probs": probs if self.pseudo_label is not None else None,
             "bg_description": bg_description,
         }

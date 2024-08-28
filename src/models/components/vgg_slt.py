@@ -65,7 +65,7 @@ class VggSLTNet(nn.Module):
         x = x.to(self.language_decoder.torch_dtype)
         masks = masks.to(self.language_decoder.torch_dtype)
 
-        outputs, labels, gen_sentences = self.language_decoder(x, 
+        outputs, labels, gen_sentences, avg_conf = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,
                                                 questions=questions, 
@@ -76,7 +76,7 @@ class VggSLTNet(nn.Module):
                                                 ret=ret,
                                                 background_description=background_description,
                                                 rec_prev=rec_prev)
-        return outputs, labels, gen_sentences
+        return outputs, labels, gen_sentences, avg_conf
 
 
 if __name__ == "__main__":

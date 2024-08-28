@@ -30,6 +30,7 @@ class Subtitles(Dataset):
         fps: int = 25,
         verbose: bool = False,
         blip_cap_path: Optional[str] = None,
+        filter_blip: bool = False,
     ):
         """
         Args:
@@ -90,10 +91,12 @@ class Subtitles(Dataset):
             np.isin(self.subtitles["episode_name"], self.setname_episode),
         )[0]
         self.filter_subtitles(filtered_indices)
-        filtered_indices = np.where(
-            np.isin(self.subtitles["episode_name"], self.blip_cap_data["video"]),
-        )[0]
-        self.filter_subtitles(filtered_indices)
+
+        if filter_blip:
+            filtered_indices = np.where(
+                np.isin(self.subtitles["episode_name"], self.blip_cap_data["video"]),
+            )[0]
+            self.filter_subtitles(filtered_indices)
         # filter by duration
         if self.verbose:
             print(
@@ -261,12 +264,15 @@ class Subtitles(Dataset):
         start_second = math.floor(sub_starts)
         end_second = math.ceil(sub_ends)
 
-        bg_description = self.blip_cap_data["captions"][self.blip_cap_data["video"].index(video_name.split(".")[0])][start_second:end_second+1]
-        bg_description = unique_ordered_list(bg_description)
-        bg_description = [x for x in bg_description if x != '']
-        if len(bg_description) == 0:
-            bg_description = ['No description available']
-        bg_description = '. '.join(bg_description) + '.'
+        try:
+            bg_description = self.blip_cap_data["captions"][self.blip_cap_data["video"].index(video_name.split(".")[0])][start_second:end_second+1]
+            bg_description = unique_ordered_list(bg_description)
+            bg_description = [x for x in bg_description if x != '']
+            if len(bg_description) == 0:
+                bg_description = ['No description available']
+            bg_description = '. '.join(bg_description) + '.'
+        except:
+            bg_description = 'No description available.'
         
         return {
             "subtitle": subtitles,

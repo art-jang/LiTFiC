@@ -35,4 +35,5 @@ question_pool: ./data/question_pool.txt
 cslr2_ckpt: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
 bleurt_path: ../hf/BLEURT-20
 pl_dist_path: pl_dist.pkl
-blip_cap_path: blip2_captions.pkl
+blip_cap_path: blip2_captions_v2.pkl
+val_episode_ind_path: val_start_indices.json
