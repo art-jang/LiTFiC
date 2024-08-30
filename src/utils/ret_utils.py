@@ -92,6 +92,11 @@ def calculate_overlap_metrics(gt, pred):
         # Split sentences into words
         gt_words = set(gt_sent.split())
         pred_words = set(pred_sent.split())
+
+        # remove punctuation from each of the words (iuncludes question and exclaimation marks)
+        gt_words = set([word.strip('.,!?') for word in gt_words])
+        pred_words = set([word.strip('.,!?') for word in pred_words])
+
         
         # Calculate intersection and union
         intersection = gt_words.intersection(pred_words)

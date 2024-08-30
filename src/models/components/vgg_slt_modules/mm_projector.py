@@ -7,10 +7,13 @@ import ipdb
 
 from src.utils.cslr_tools import load_checkpoint_model
 from omegaconf import OmegaConf
+from src.models.components.vgg_slt_modules.qformer import QFormer
 
 class MMProjector(nn.Module):
     def __init__(self,
                  cslr2_config,
+                 use_qformer,
+                 qformer_config,
                  projector_type,
                  mm_hidden_size,
                  hidden_size,
@@ -31,6 +34,10 @@ class MMProjector(nn.Module):
         if cslr2_options.freeze:
             for name, param in self.cslr2.named_parameters():
                 param.requires_grad = False
+        
+        self.use_qformer = use_qformer
+        if use_qformer:
+            self.qformer = QFormer(**qformer_config)
 
         # mapping network
         mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
@@ -114,6 +121,13 @@ class MMProjector(nn.Module):
     def forward(self, x, masks=None, target_indices = None, target_labels = None):
         if self.use_cslr2:
             x, masks = self.cslr2(x, masks, target_indices, target_labels)
+        
+        if self.use_qformer:
+            x = self.qformer(x, masks)
+            masks = None
+
+            return x, masks
+            
         if self.early_fusion:
             x, masks = self._pool(x, masks)
             x = self.projector(x)
