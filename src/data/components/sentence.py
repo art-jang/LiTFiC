@@ -14,8 +14,9 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
-from src.utils.data_utils import sample_sub
+from src.utils.data_utils import sample_sub, cleanup_sub, process_cslr2_pls
 from src.utils.cslr_tools import compress_and_average
+import os
 
 class Sentences(Dataset):
     """General dataset class to load sentences from data files"""
@@ -64,6 +65,19 @@ class Sentences(Dataset):
         blip_cap_path: Optional[str] = None,
         filter_blip: Optional[bool] = False,
         drop_stopwords: Optional[bool] = False,
+        sw_level: Optional[int] = 0,
+        aug_prev: Optional[bool] = False,
+        aug_prev_pct: Optional[float] = 0.5,
+        aug_prev_shuffle: Optional[bool] = False,
+        man_gloss_path: Optional[str] = None,
+        use_man_gloss: Optional[bool] = False,
+        use_cslr2_pl: Optional[bool] = False,
+        cslr2_pl_type: Optional[str] = None,
+        sent_ret_n = 20,
+        train_sent_ret_path: Optional[str] = None,
+        val_sent_ret_path: Optional[str] = None,
+        lip_feats_path: Optional[str] = None,
+        filter_based_on_pls: Optional[bool] = False,
     ):
         """
         Args:
@@ -112,6 +126,14 @@ class Sentences(Dataset):
         """
         self.skip_mode = Value("i", False)  # shared variable to skip loading
         # subtitles
+
+        pl_configs = {
+            "lmdb_path": pl_lmdb,
+            "load_stride": pl_load_stride,
+            "load_float16": pl_load_float16,
+            "lmdb_window_size": pl_lmdb_window_size,
+            "lmdb_stride": pl_lmdb_stride,
+        }
         self.subtitles = Subtitles(
             subset2episode=subset2episode,
             setname=setname,
@@ -130,6 +152,22 @@ class Sentences(Dataset):
             verbose=verbose,
             blip_cap_path=blip_cap_path,
             filter_blip=filter_blip,
+            aug_prev=aug_prev,
+            aug_prev_pct=aug_prev_pct,
+            aug_prev_shuffle=aug_prev_shuffle,
+            man_gloss_path=man_gloss_path,
+            use_man_gloss=use_man_gloss,
+            cslr2_pl_type=cslr2_pl_type,
+            sent_ret_n = sent_ret_n,
+            train_sent_ret_path = train_sent_ret_path,
+            val_sent_ret_path = val_sent_ret_path,
+            filter_based_on_pls = filter_based_on_pls,
+            pl_configs = pl_configs,
+            pl_filter = pl_filter,
+            pl_min_count = pl_min_count,
+            pl_synonym_grouping = pl_synonym_grouping,
+            synonyms_pkl = synonyms_pkl,
+            vocab_pkl = vocab_pkl,
         )
         
         # features
@@ -187,14 +225,28 @@ class Sentences(Dataset):
             assert word_embds_pkl is not None, msg
             self.word_embds = pickle.load(open(word_embds_pkl, "rb"))
         
-        self.sub_sample_shuffle = True if setname == "train" else False
+        # if sub_sample_shuffle:
+        #     self.sub_sample_shuffle = True if setname == "train" else False
+        # else:
+        #     self.sub_sample_shuffle = False
+        self.sub_sample_shuffle = sub_sample_shuffle
+        # self.sub_sample_shuffle = sub_sample_shuffle if sub_sample_shuffle is not None else True
         self.sub_sample_pct = sub_sample_pct
         self.sub_sample_replace = sub_sample_replace
         self.drop_stopwords = drop_stopwords
+        self.sw_level = sw_level
 
         self.pl_dist = None
         if pl_dist_path is not None:
             self.pl_dist = pickle.load(open(pl_dist_path, "rb"))
+        
+        self.use_cslr2_pl = use_cslr2_pl
+        self.cslr2_pl_type = cslr2_pl_type
+
+        if os.path.exists(lip_feats_path):
+            self.lip_feats = pickle.load(open(lip_feats_path, "rb"))
+        else:
+            self.lip_feats = None
         
 
 
@@ -265,6 +317,13 @@ class Sentences(Dataset):
         previous_context: Optional[str] = None,
         question: Optional[str] = None,
         bg_description: Optional[str] = None,
+        man_gloss: Optional[str] = None,
+        cslr2_labels = None,
+        cslr2_probs = None,
+        ret_sent = None,
+        id = None,
+        prev_start = None,
+        prev_end = None,
     ) -> dict:
         """Loads single item based on subtitle and video name"""
         if self.skip_mode.value:
@@ -281,6 +340,7 @@ class Sentences(Dataset):
                 "previous_context": previous_context,
                 "question": question,
                 "bg_description": bg_description,
+                "man_gloss": man_gloss
             }
         feats = None
         if self.features is not None:
@@ -328,6 +388,11 @@ class Sentences(Dataset):
             if self.word_embds is not None:
                 word_embds_dict = {}
             annotation_dict, target_dict = {}, {}
+
+            annotation_dict_post, target_dict_post = {}, {}
+            word_embds_dict_post = {}
+            prob_list = []
+
             for annotation_idx, (prob, label) in enumerate(zip(probs, labels)):
                 # with enumerate, we save tensor(idx) as key
                 # using range, we can directly have idx as key
@@ -342,25 +407,41 @@ class Sentences(Dataset):
                     # only keep annotations with
                     # 1) prob >= pl_filter
                     # 2) occuring at least pl_min_count times
+                    prob_list.append(prob)
                     try:
-                        target_dict[correct_annotation_idx].append(label)
+                        target_dict_post[correct_annotation_idx].append(label)
                     except KeyError:
-                        target_dict[correct_annotation_idx] = [label]
+                        target_dict_post[correct_annotation_idx] = [label]
                     annotation_list = [
                         int(int(sub_start * self.subtitles.fps) + correct_annotation_idx),
                         "pseudo-label", prob,
                     ]
                     try:
-                        annotation_dict[label].append(annotation_list)
+                        annotation_dict_post[label].append(annotation_list)
                     except KeyError:
-                        annotation_dict[label] = [annotation_list]
+                        annotation_dict_post[label] = [annotation_list]
                     if self.word_embds is not None:
-                        word_embds_dict[correct_annotation_idx] = self.word_embds[label]
+                        word_embds_dict_post[correct_annotation_idx] = self.word_embds[label]
+                
+                try:
+                    target_dict[correct_annotation_idx].append(label)
+                except KeyError:
+                    target_dict[correct_annotation_idx] = [label]
+                annotation_list = [
+                    int(int(sub_start * self.subtitles.fps) + correct_annotation_idx),
+                    "pseudo-label", prob,
+                ]
+                try:
+                    annotation_dict[label].append(annotation_list)
+                except KeyError:
+                    annotation_dict[label] = [annotation_list]
+                if self.word_embds is not None:
+                    word_embds_dict[correct_annotation_idx] = self.word_embds[label]
             # video augmentation
-            probs = [p[0].item() for p in probs]
-            pls = [self.inverted_vocab[x[0]] for x in list(target_dict.values())]
+            probs_cp = prob_list
+            pls = [self.inverted_vocab[x[0]] for x in list(target_dict_post.values())]
 
-            pls, probs = compress_and_average(pls, probs)
+            pls, probs_cp = compress_and_average(pls, probs_cp)
             
             if self.video_augmentations is not None:
                 feats, kept_indices = self.video_augmentations(feats)
@@ -392,8 +473,78 @@ class Sentences(Dataset):
                 except RuntimeError:
                     target_word_embds = torch.tensor(list(word_embds_dict.values()))  # empty
                     assert len(target_indices) == len(target_word_embds)
+            
+            if cslr2_labels is not None:
+                cslr2_pls, cslr2_p, cslr2_target_labels, cslr2_target_indices = process_cslr2_pls(cslr2_labels, cslr2_probs, self.inverted_vocab)
+                cslr2_pls, cslr2_p = compress_and_average(cslr2_pls, cslr2_p)
+                if self.use_cslr2_pl:
+                    # target_indices = cslr2_target_indices
+                    # target_labels = cslr2_target_labels
+                    pls = cslr2_pls
+                    probs = cslr2_p
+        prev_pls = []
+        prev_pls_probs = []
+        if self.pseudo_label is not None:
+            for i in range(len(prev_start)):
+                ps = int(prev_start[i] * self.subtitles.fps)
+                pe = int(prev_end[i] * self.subtitles.fps)
+
+                labels, probs = self.pseudo_label.load_sequence(
+                    episode_name=video_name,
+                    begin_frame=ps,
+                    end_frame=pe,
+                )
+
+                if self.synonym_grouping:
+                    words = itemgetter(
+                        *rearrange(labels.numpy(), "t k -> (t k)")
+                    )(self.inverted_vocab)
+                    words = rearrange(
+                        np.array(words), "(t k) -> t k", k=5,
+                    )
+                    new_words, new_probs = [], []
+                    for word, prob in zip(words, probs):
+                        new_prob, new_word = self.synonym_combine(word, prob)
+                        new_words.append(new_word)
+                        new_probs.append(new_prob)
+                    new_words = rearrange(np.array(new_words), "t k -> (t k)")
+                    labels = itemgetter(*new_words)(self.vocab)
+                    labels = rearrange(torch.tensor(labels), "(t k) -> t k", k=5)
+                    probs = torch.stack(new_probs)
+                
+                if self.pl_min_count > 1:
+                    # torch-based method
+                    _, counts = torch.unique_consecutive(labels[:, 0], return_counts=True)
+                    repeated_counts = torch.repeat_interleave(counts, counts)
+                    min_count_indices = torch.where(repeated_counts >= self.pl_min_count)[0]
+                else:
+                    min_count_indices = torch.arange(start=0, end=len(labels))
+                
+                label_list = []
+                prob_list = []
+
+                for annotation_idx, (prob, label) in enumerate(zip(probs, labels)):
+
+                    prob = prob[0].item()
+                    label = label[0].item()
+                    if prob >= self.pl_filter and annotation_idx in min_count_indices:
+                        prob_list.append(prob)
+                        label_list.append(label)
+                
+                prev_p = [self.inverted_vocab[x] for x in label_list]
+                prev_p, prev_p_probs = compress_and_average(prev_p, prob_list)
+                prev_pls.extend(prev_p)
+                prev_pls_probs.extend(prev_p_probs)
+            
+                    
+            
+        if id is not None:
+            lip_feats = self.lip_feats[id] if self.lip_feats is not None else None
+        else:
+            lip_feats = None
+
         return {
-            "subtitle": subtitle,
+            "subtitle": cleanup_sub(subtitle),
             "features": feats if self.features is not None else None,
             "target_indices": target_indices if self.pseudo_label is not None else None,
             "target_labels": target_labels if self.pseudo_label is not None else None,
@@ -405,9 +556,15 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
-            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist, self.drop_stopwords),
-            "probs": probs if self.pseudo_label is not None else None,
+            "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist, self.drop_stopwords, self.sw_level),
+            "probs": probs_cp if self.pseudo_label is not None else None,
             "bg_description": bg_description,
+            "man_gloss": man_gloss,
+            "ret_sent": ret_sent,
+            "lip_feats": lip_feats,
+            "prev_pls": prev_pls,
+            "prev_pls_probs": prev_pls_probs,
+            "id": id,
         }
 
         '''
@@ -433,7 +590,14 @@ class Sentences(Dataset):
                                     sub_end=sub_ends,
                                     previous_context=subtitles["previous_context"],
                                     question=subtitles["question"],
-                                    bg_description=subtitles["bg_description"])
+                                    bg_description=subtitles["bg_description"],
+                                    man_gloss=subtitles["man_gloss"],
+                                    cslr2_labels = subtitles["cslr2_labels"],
+                                    cslr2_probs = subtitles["cslr2_probs"],
+                                    ret_sent = subtitles["ret_sent"],
+                                    id = subtitles["id"],
+                                    prev_start=subtitles["prev_start"],
+                                    prev_end=subtitles["prev_end"],)
 
 
 def pad_tensors_and_create_attention_masks(tensor_list, padding_side='right'):
@@ -485,10 +649,20 @@ def collate_fn_padd_t(batch: List):
     sub_gt = [item["sub_gt"] for item in batch]
     probs = [item["probs"] for item in batch]
     bg_description = [item["bg_description"] for item in batch]
+    man_gloss = [item["man_gloss"] for item in batch]
+    ret_sent = [item["ret_sent"] for item in batch]
+    lip_feats = [item["lip_feats"] for item in batch]
+    prev_pls = [item["prev_pls"] for item in batch]
+    prev_pls_probs = [item["prev_pls_probs"] for item in batch]
+    ids = [item["id"] for item in batch]
 
     padded_features, attn_masks = None, None
     if features[0] is not None:
         padded_features, attn_masks = pad_tensors_and_create_attention_masks(features, padding_side='right')
+    
+    padded_lip_feats, attn_masks_lip = None, None
+    if lip_feats[0] is not None:
+        padded_lip_feats, attn_masks_lip = pad_tensors_and_create_attention_masks(lip_feats, padding_side='right')
 
     return {
         "features": padded_features,
@@ -504,7 +678,14 @@ def collate_fn_padd_t(batch: List):
         "video_names": video_names,
         "sub_gt": sub_gt,
         "probs": probs,
-        "bg_description": bg_description
+        "bg_description": bg_description,
+        "man_gloss": man_gloss,
+        "ret_sent": ret_sent,
+        "lip_feats": padded_lip_feats,
+        "attn_masks_lip": attn_masks_lip,
+        "prev_pls": prev_pls,
+        "prev_pls_probs": prev_pls_probs,
+        "ids": ids,
     }
 
 

@@ -11,6 +11,7 @@ from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.cider.cider import Cider
+from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 
 import ipdb
 import lmdb
@@ -99,6 +100,7 @@ class SLTLitModule(LightningModule):
         self.bleu = Bleu(4)
         self.rouge = Rouge()
         self.cider = Cider()
+        self.tokenizer = PTBTokenizer()
 
         self.all_preds=[]
         self.avg_confs=[] 
@@ -113,6 +115,9 @@ class SLTLitModule(LightningModule):
         self.probs = []
         self.rec_prev = []
         self.rec_prev_conf = []
+        self.prev_pls = []
+        self.prev_pls_probs = []
+        self.ids = []
 
         self.context_len = context_len
         self.context_buffer = CircularBuffer(context_len)
@@ -312,8 +317,11 @@ class SLTLitModule(LightningModule):
             self.blip_cap.extend(batch['bg_description'])
             self.rec_prev.extend(batch['rec_prev'])
             self.rec_prev_conf.extend(batch['rec_prev_conf'])
-            if batch['previous_contexts'] is not None:
-                self.prev_context.extend(batch['previous_contexts'])
+            self.prev_pls.extend(batch['prev_pls'])
+            self.prev_pls_probs.extend(batch['prev_pls_probs'])
+            self.ids.extend(batch['ids'])
+            # if batch['previous_contexts'] is not None:
+            #     self.prev_context.extend(batch['previous_contexts'])
 
         return loss, preds_list, labels_list
 
@@ -351,6 +359,12 @@ class SLTLitModule(LightningModule):
         all_preds = tensor_to_strings(m_preds_tensor.view(-1, 1024))
         all_gts = tensor_to_strings(m_gt_tensor.view(-1, 1024))
 
+        # hypotheses = {str(i): [{'image_id': str(i), 'id':str(i), 'caption': all_preds[i]}] for i in range(len(all_preds))}
+        # references = {str(i): [{'image_id': str(i), 'id':str(i), 'caption': all_gts[i]}] for i in range(len(all_gts))}
+
+        # hypotheses = self.tokenizer.tokenize(hypotheses)
+        # references = self.tokenizer.tokenize(references)
+        
         hypotheses = {'image'+str(i): [all_preds[i]] for i in range(len(all_preds))}
         references = {'image'+str(i): [all_gts[i]] for i in range(len(all_gts))}
 
@@ -363,11 +377,20 @@ class SLTLitModule(LightningModule):
         precision = sum(precision_list)/len(precision_list)
         recall = sum(recall_list)/len(recall_list)
 
+        try:
+            id_tensor = torch.tensor(self.ids)
+            m_id_tensor = self.all_gather(id_tensor)
+            all_ids = m_id_tensor.view(-1).tolist() 
+        except:
+            all_ids = []
+
         if self.global_rank == 0:
             cap_dict = {
                 "gt": all_gts,
                 "pred": all_preds,
+                "ids": all_ids,
             }
+            os.makedirs(f"{self.vis_dir}/{self.current_epoch}", exist_ok=True)
             with open(f"{self.vis_dir}/{self.current_epoch}/cap_{idx}.json", 'w') as f:
                 json.dump(cap_dict, f)
 
@@ -375,7 +398,7 @@ class SLTLitModule(LightningModule):
         return bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall
     
     def _eval(self) -> None:
-        if self.global_rank == 0:
+        if self.global_rank == 0 and not self.trainer.testing:
             hypotheses = {'image'+str(i): [self.all_preds[0][i]] for i in range(len(self.all_preds[0]))}
             references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
 
@@ -419,6 +442,8 @@ class SLTLitModule(LightningModule):
                 tmp_dict['blip_cap'] = self.blip_cap[idx]
                 tmp_dict['rec_prev'] = self.rec_prev[idx]
                 tmp_dict['rec_prev_conf'] = self.rec_prev_conf[idx]
+                tmp_dict['prev_pls'] = self.prev_pls[idx]
+                tmp_dict['prev_pls_probs'] = self.prev_pls_probs[idx]
                 if len(self.all_preds) > 1:
                     tmp_dict["pred_pls"] = self.all_preds[1][idx]
                     tmp_dict["conf_pls"] = self.avg_confs[1][idx]
@@ -460,7 +485,8 @@ class SLTLitModule(LightningModule):
 
         ret_metrics_list = None
         # if not self.trainer.sanity_checking:
-        ret_metrics_list = self.perform_retrieval(self.ret_dataloader)
+        # if not self.trainer.testing:
+        #     ret_metrics_list = self.perform_retrieval(self.ret_dataloader)
 
         if ret_metrics_list is not None:
             for idx, ret_metrics in enumerate(ret_metrics_list):

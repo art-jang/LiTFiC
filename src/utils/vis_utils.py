@@ -45,14 +45,17 @@ def get_rgb_frames(lmdb_keys: List[str], lmdb_env: lmdb.Environment) -> List:
     """
     frames = []
     for key in lmdb_keys:
-        with lmdb_env.begin() as txn:
-            frame = txn.get(key)
-        frame = cv2.imdecode(
-            np.frombuffer(frame, dtype=np.uint8),
-            cv2.IMREAD_COLOR,
-        )
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(rgb_frame)
+        try:
+            with lmdb_env.begin() as txn:
+                frame = txn.get(key)
+            frame = cv2.imdecode(
+                np.frombuffer(frame, dtype=np.uint8),
+                cv2.IMREAD_COLOR,
+            )
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(rgb_frame)
+        except Exception as e:
+            print(f"Error: {e}")
     return frames
 
 def save_video(name, start, end, output_path, rgb_lmdb_env, fps=25):
@@ -69,11 +72,13 @@ def save_video(name, start, end, output_path, rgb_lmdb_env, fps=25):
 
     frames = torch.tensor(np.array(frames), dtype=torch.uint8)
     
-
-    write_video(
+    try:
+        write_video(
             filename=output_path,
             video_array=frames,
-            fps=25,
+            fps=fps,
         )
+    except Exception as e:
+        print(f"Error: {e}")
 
     

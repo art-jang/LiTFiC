@@ -33,3 +33,11 @@ llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
 lm_root: ../cslr2/t5_checkpoint/
 question_pool: ./data/question_pool.txt
 cslr2_ckpt: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
+bleurt_path: 
+pl_dist_path: null
+blip_cap_path: blip2_captions_v2.pkl
+val_episode_ind_path: ../cslr2_t/bobsl/val_start_indices_cv2.json
+man_gloss_path: null
+train_sent_ret_path: ../cslr2_t/bobsl/train_sent_ret.pkl
+val_sent_ret_path: ../cslr2_t/bobsl/val_sent_ret.pkl
+lip_feats_path: null

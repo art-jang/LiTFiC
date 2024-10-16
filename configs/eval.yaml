@@ -17,5 +17,5 @@ task_name: "eval"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: null
-oracle_test: True
+ckpt_path: logs/llama3_feats_lora/runs/2024-08-23_19-34-32/checkpoints/epoch_001.ckpt
+oracle_test: False

@@ -7,6 +7,7 @@ from peft import LoraConfig, get_peft_model
 import random
 
 from src.utils.score_utils import average_exp_values
+from src.utils.data_utils import get_unique_bg_words
 
 
 class LanguageDecoder(nn.Module):
@@ -28,6 +29,19 @@ class LanguageDecoder(nn.Module):
                  bg_desc = False,
                  use_bg_w_sub = False,
                  use_rec_prev = False,
+                 mix_in_prev_prob = 0.5,
+                 mix_in_bg_prob = 0.5,
+                 min_prev_conf = 0.0,
+                 use_man_gloss = False,
+                 use_bg_words = False,
+                 drop_bg_sw = False,
+                 ret_sent = False,
+                 mix_in_ret_prob = 0.0,
+                 use_lip_feats = False,
+                 mix_in_lip_prob = 0.0,
+                 use_prev_pls = False,
+                 use_prev_pls_probs = False,
+                 mix_in_prev_pls = 0.0,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -72,6 +86,24 @@ class LanguageDecoder(nn.Module):
         self.bg_desc = bg_desc
         self.use_bg_w_sub = use_bg_w_sub
         self.use_rec_prev = use_rec_prev
+        self.mix_in_prev_prob = mix_in_prev_prob
+        self.mix_in_bg_prob = mix_in_bg_prob
+        self.min_prev_conf = min_prev_conf
+
+        self.use_man_gloss = use_man_gloss
+
+        self.use_bg_words = use_bg_words
+        self.drop_bg_sw = drop_bg_sw
+
+        self.ret_sent = ret_sent
+        self.mix_in_ret_prob = mix_in_ret_prob
+
+        self.use_lip_feats = use_lip_feats
+        self.mix_in_lip_prob = mix_in_lip_prob
+
+        self.use_prev_pls = use_prev_pls
+        self.use_prev_pls_probs = use_prev_pls_probs
+        self.mix_in_prev_pls = mix_in_prev_pls
 
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
@@ -79,65 +111,103 @@ class LanguageDecoder(nn.Module):
             input_ids = torch.cat([input_ids, torch.LongTensor([self.tokenizer.eos_token_id]).to(device)], dim=0)
         return input_ids
     
-    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None, background_description=None):
+    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None, background_description=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
 
         final_q = None
+        inter_q = None
         pl_switch = False
 
-        questions = ['You are an AI assistant designed to translate a video of a british sign language signing sequence obtained from a part of a BBC episode to English.' for _ in questions]
-       
+        # Initial prompt setup for questions
+        questions = ['You are an AI assistant designed to translate a video of a British Sign Language signing sequence obtained from a part of a BBC episode to English.' for _ in questions]
+
+        # Process for non-oracle case
         if not self.oracle:
+            # Add previous contexts if applicable
+            if previous_contexts is not None and self.use_rec_prev and (random.random() <= self.mix_in_prev_prob or not self.training):
+                questions = [q + f' The previous context is the following: {c}' if c else q for q, c in zip(questions, previous_contexts)]
             
-            if previous_contexts is not None:
-                questions = [q + ' The previous context is the following: ' + c  if c != '' \
-                            else q for q, c in zip(questions, previous_contexts)]
+            if self.use_prev_pls and (random.random() <= self.mix_in_prev_pls or not self.training):
+                if self.use_prev_pls_probs:
+                    questions = [q + ' The previous possible words with their confidences: ' + ", ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) if len(pl) > 0 else "Not Available" + '.' for q, pl, p in zip(questions, prev_pls, prev_pls_probs)]
+                else:
+                    questions = [q + ' The previous possible words are: ' + ", ".join(pl) if len(pl) > 0 else "Not Available" + '.' for q, pl in zip(questions, prev_pls)]
+
+            # Use manual gloss if applicable
+            pls = man_gloss if self.use_man_gloss and man_gloss is not None else pls
+
+            # Incorporate possible words (PL) and probabilities in the format pl_word(pl_prob)
+            if self.use_pl_probs and (random.random() <= self.mix_in_pls_prob or not self.training):
+                questions = [q + ' The following are the possible words with their confidences: ' + ", ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) + '.' for q, pl, p in zip(questions, pls, probs)]
+            elif self.use_pl_w_feats and (random.random() <= self.mix_in_pls_prob or not self.training):
+                questions = [q + f' The following are some possible words present in the sentence: {", ".join(pl) if len(pl) > 0 else "Not available"}.' for q, pl in zip(questions, pls)]
+                
+            # Add background description if applicable
+            if self.bg_desc and (random.random() <= self.mix_in_bg_prob or not self.training):
+                if self.use_bg_words:
+                    bg_desc = [get_unique_bg_words(b, drop_sw=self.drop_bg_sw) for b in background_description]
+                    questions = [q + f' Description of the background is: {", ".join(b) if len(b) > 0 else "Not available"}.' for q, b in zip(questions, bg_desc)]
+                else:
+                    questions = [q + f' Description of the background is: {b}' for q, b in zip(questions, background_description)]
+                
             
-            if self.use_pl_w_feats:
-                questions = [q + ' The following are some possible words present in the sentence: ' + " ".join(pl) + "." for q, pl in zip(questions, pls)]
-                if self.use_pl_probs:
-                    questions = [q + ' The confidences for the previous words are: ' + ", ".join([f"{p:.2f}" + "." for p in pl]) for q, pl in zip(questions, probs)]
+            if self.ret_sent and (random.random() <= self.mix_in_ret_prob or not self.training):
+                questions = [q + f' Most similar sentence retrieved from a text_corpus is: {r}' for q, r in zip(questions, ret_sent) if r != ""]
+
+
+            # Finalize question prompt for video tokens
+            if self.use_lip_feats and (random.random() <= self.mix_in_lip_prob or not self.training):
+                questions = [q + f' The following are the lip features: ' for q in questions]
+                inter_q = [". The following are the video tokens: " for _ in questions]
+                final_q = [".\nGenerated Sentence: " for _ in questions]
             
-            if self.bg_desc:
-                questions = [q + ' Description of the background is: ' + b for q, b in zip(questions, background_description)]
-            
-            questions = [q + " The following are the video tokens: " for q in questions]
-            final_q = [".\nGenerated Sentence: " for _ in questions]
-        
+            else:
+                # Finalize question prompt for video tokens
+                questions = [q + " The following are the video tokens: " for q in questions]
+                final_q = [".\nGenerated Sentence: " for _ in questions]
+
+        # Process for oracle case
         else:
             if self.sub_sub:
-                if self.training and self.mix_in_pls:
-                    rand = random.random()
-                    if rand > self.mix_in_pls_prob:
-                        pls = sub_gt
-                    else: 
-                        self.sub_sub = False
-                        pl_switch = True
-                else:
+                if self.training and self.mix_in_pls and random.random() > self.mix_in_pls_prob:
                     pls = sub_gt
+                else:
+                    self.sub_sub = False
+                    pl_switch = True
+            else:
+                pls = sub_gt
 
-            system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
-                            "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
-                            "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            # Set up system prompt for oracle case
+            system_prompt = (
+                "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. "
+                "You need to strictly follow these rules:\n"
+                "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n"
+                "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            )
             if self.use_pl_probs and not self.sub_sub:
-                system_prompt +=  "3. The user may provide a list probabilities for each word. You can use these probabilities to generate the sentence.\n"
+                system_prompt += "3. The user may provide a list of probabilities for each word. You can use these probabilities to generate the sentence.\n"
 
+            # Apply system prompt to all questions
             questions = [system_prompt for _ in questions]
 
-            if previous_contexts is not None:
-                questions = [q + ' The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
+            # Add previous contexts if applicable
+            if previous_contexts is not None and (random.random() <= self.mix_in_prev_prob or not self.training):
+                questions = [q + f' The previous context is the following: {c}' if c else q for q, c in zip(questions, previous_contexts)]
 
-            questions = [q + ' The word list is: ' + " ".join(pl) + "." for q, pl in zip(questions, pls)]
-        
-            if self.use_pl_probs and not self.sub_sub:
-                questions = [q + ' The probabilities are: ' + ", ".join([f"{p:.2f}" + "." for p in pl]) for q, pl in zip(questions, probs)]
-
-            if self.bg_desc:
-                if self.sub_sub:
-                    if self.use_bg_w_sub:
-                        questions = [q + ' Description of the background is: ' + b for q, b in zip(questions, background_description)]
-                else:
-                    questions = [q + ' Description of the background is: ' + b for q, b in zip(questions, background_description)]
+            # Add word list with probabilities in the format pl_word(pl_prob)
+            if not self.sub_sub and self.use_pl_probs:
+                questions = [q + ' The word list with their confidences: ' + " ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) + '.' for q, pl, p in zip(questions, pls, probs)]
+            else:
+                questions = [q + ' The word list is: ' + " ".join(pl) + '.' for q, pl in zip(questions, pls)]
             
+
+            # Add background description if applicable
+            if self.bg_desc and (self.sub_sub and self.use_bg_w_sub or random.random() <= self.mix_in_bg_prob or not self.training):
+                questions = [q + f' Description of the background is: {b}' for q, b in zip(questions, background_description)]
+            
+            if self.ret_sent and (random.random() <= self.mix_in_ret_prob or not self.training):
+                questions = [q + f' Most similar sentence retrieved from a text_corpus is: {r}' for q, r in zip(questions, ret_sent) if r != ""]
+
+            # Finalize oracle prompt for generated sentence
             questions = [q + '\nGenerated Sentence: ' for q in questions]
         
 
@@ -152,6 +222,11 @@ class LanguageDecoder(nn.Module):
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.embed_tokens(cur_q)
 
+                if inter_q is not None:
+                    cur_l_embed = lip_feats[i, :int(lip_masks[i].sum())].to(device) # [num_l_tokens, C]
+                    cur_inter_q = self._tokenize(inter_q[i], device=device)[1:-1]
+                    cur_inter_q_embed = self.embed_tokens(cur_inter_q)
+
                 if final_q is not None:
                     cur_final_q = self._tokenize(final_q[i], device=device)[1:-1]
                     cur_final_q_embed = self.embed_tokens(cur_final_q)
@@ -162,7 +237,10 @@ class LanguageDecoder(nn.Module):
                 cur_embed = torch.cat([cur_q_embed, cur_s_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]
                 cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q))).to(device), cur_s], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens]
             elif questions is not None:
-                if final_q is not None:
+                if inter_q is not None:
+                    cur_embed = torch.cat([cur_q_embed, cur_l_embed, cur_inter_q_embed, cur_v_embed, cur_final_q_embed], dim=0)
+                    cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_l_embed)+len(cur_inter_q_embed) + len(cur_v_embed) + len(cur_final_q_embed))).to(device), cur_s], dim=0)
+                elif final_q is not None:
                     cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed, cur_s_embed], dim=0)
                     cur_label = cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed)+len(cur_final_q_embed))).to(device), cur_s], dim=0)
                 else:
@@ -209,60 +287,104 @@ class LanguageDecoder(nn.Module):
         
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
-    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None, background_description = None, rec_prev=None):
+    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None, background_description = None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
 
         final_q = None
+        pl_switch = False
+        inter_q = None
+
+        # Handling rec_prev if applicable
         if self.use_rec_prev and not self.sub_sub:
-            rec_prev = [". ".join(r) + "." if len(r) > 0 else '' for r in rec_prev]
-            previous_contexts = rec_prev  
+            if len(rec_prev) > 0:
+                rec_prev = [". ".join(r) + "." if len(r) > 0 and c[0] >= self.min_prev_conf else '' for r, c in zip(rec_prev, rec_prev_conf)]
+                previous_contexts = rec_prev
+            else:
+                previous_contexts = ['' for _ in range(len(subtitles))]
 
-        questions = ['You are an AI assistant designed to translate a video of a british sign language signing sequence obtained from a part of a BBC episode to English.' for _ in questions]
-        
+        # Initial prompt setup for questions
+        questions = ['You are an AI assistant designed to translate a video of a British Sign Language signing sequence obtained from a part of a BBC episode to English.' for _ in questions]
+
+        # Process for non-oracle case
         if not self.oracle:
+            # Add previous contexts if applicable
+            if previous_contexts is not None and self.use_rec_prev:
+                questions = [q + f' The previous context is the following: {c}' if c else q for q, c in zip(questions, previous_contexts)]
+            
+            if self.use_prev_pls:
+                if self.use_prev_pls_probs:
+                    questions = [q + ' The previous possible words with their confidences: ' + ", ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) if len(pl) > 0 else "Not Available" + '.' for q, pl, p in zip(questions, prev_pls, prev_pls_probs)]
+                else:
+                    questions = [q + ' The previous possible words are: ' + ", ".join(pl) if len(pl) > 0 else "Not Available" + '.' for q, pl in zip(questions, prev_pls)]
 
-            if previous_contexts is not None:
-                questions = [q + ' The previous context is the following: ' + c  if c != '' \
-                            else q for q, c in zip(questions, previous_contexts)]
-            
-            if self.use_pl_w_feats:
-                questions = [q + ' The following are some possible words present in the sentence: ' + " ".join(pl) + "." for q, pl in zip(questions, pls)]
-                if self.use_pl_probs:
-                    questions = [q + ' The confidences for the previous words are: ' + ", ".join([f"{p:.2f}" + "." for p in pl]) for q, pl in zip(questions, probs)]
-            
+            # Use manual gloss if applicable
+            pls = man_gloss if self.use_man_gloss and man_gloss is not None else pls
+
+            # Incorporate possible words (PL) and probabilities in the format pl_word(pl_prob)
+            if self.use_pl_probs:
+                questions = [q + ' The following are the possible words with their confidences: ' + ", ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) + '.' for q, pl, p in zip(questions, pls, probs)]
+            elif self.use_pl_w_feats:
+                questions = [q + f' The following are some possible words present in the sentence: {", ".join(pl) if len(pl) > 0 else "Not available"}.' for q, pl in zip(questions, pls)]
+
+            # Add background description if applicable
             if self.bg_desc:
-                questions = [q + ' Description of the background is: ' + b for q, b in zip(questions, background_description)]
+                if self.use_bg_words:
+                    bg_desc = [get_unique_bg_words(b, drop_sw=self.drop_bg_sw) for b in background_description]
+                    questions = [q + f' Description of the background is: {", ".join(b) if len(b) > 0 else "Not available"}.' for q, b in zip(questions, bg_desc)]
+                else:
+                    questions = [q + f' Description of the background is: {b}' for q, b in zip(questions, background_description)]
             
-            questions = [q + " The following are the video tokens: " for q in questions]
-            final_q = [".\nGenerated Sentence: " for _ in questions]
-        
+            if self.ret_sent:
+                questions = [q + f' Most similar sentence retrieved from a text_corpus is: {r}' for q, r in zip(questions, ret_sent) if r != ""]
+
+            
+            if self.use_lip_feats:
+                questions = [q + f' The following are the lip features: ' for q in questions]
+                inter_q = [". The following are the video tokens: " for _ in questions]
+                final_q = [".\nGenerated Sentence: " for _ in questions]
+            
+            else:
+                # Finalize question prompt for video tokens
+                questions = [q + " The following are the video tokens: " for q in questions]
+                final_q = [".\nGenerated Sentence: " for _ in questions]
+
+        # Process for oracle case
         else:
             if self.sub_sub:
                 pls = sub_gt
 
-            system_prompt = "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. You need to strictly follow these rules:\n" + \
-                            "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n" + \
-                            "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            # Set up system prompt for oracle case
+            system_prompt = (
+                "You are a helpful assistant designed to generate a sentence based on the list of words entered by the user. "
+                "You need to strictly follow these rules:\n"
+                "1. The user will only give the list of English words separated by a space, you just need to generate a meaningful sentence from them.\n"
+                "2. Only provide a response containing the generated sentence. If you cannot create an English sentence then respond with ”No Translation.\n"
+            )
             if self.use_pl_probs and not self.sub_sub:
-                system_prompt +=  "3. The user may provide a list probabilities for each word. You can use these probabilities to generate the sentence.\n"
+                system_prompt += "3. The user may provide a list of probabilities for each word. You can use these probabilities to generate the sentence.\n"
 
+            # Apply system prompt to all questions
             questions = [system_prompt for _ in questions]
 
+            # Add previous contexts if applicable
             if previous_contexts is not None:
-                questions = [q + ' The previous context is the following: ' + c for q, c in zip(questions, previous_contexts)]
+                questions = [q + f' The previous context is the following: {c}' if c else q for q, c in zip(questions, previous_contexts)]
 
-            questions = [q + ' The word list is: ' + " ".join(pl) + "." for q, pl in zip(questions, pls)]
-        
-            if self.use_pl_probs and not self.sub_sub:
-                questions = [q + ' The probabilities are: ' + ", ".join([f"{p:.2f}" + "." for p in pl]) for q, pl in zip(questions, probs)]
+            # Add word list with probabilities in the format pl_word(pl_prob)
+            if not self.sub_sub and self.use_pl_probs:
+                questions = [q + ' The word list with their confidences: ' + " ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) + '.' for q, pl, p in zip(questions, pls, probs)]
+            else:
+                questions = [q + ' The word list is: ' + " ".join(pl) + '.' for q, pl in zip(questions, pls)]
 
+            # Add background description if applicable
             if self.bg_desc:
-                if self.sub_sub:
-                    if self.use_bg_w_sub:
-                        questions = [q + ' Description of the background is: ' + b for q, b in zip(questions, background_description)]
-                else:
-                    questions = [q + ' Description of the background is: ' + b for q, b in zip(questions, background_description)]
+                questions = [q + f' Description of the background is: {b}' for q, b in zip(questions, background_description)]
             
+            if self.ret_sent:
+                questions = [q + f' Most similar sentence retrieved from a text_corpus is: {r}' for q, r in zip(questions, ret_sent) if r != ""]
+
+            # Finalize oracle prompt for generated sentence
             questions = [q + '\nGenerated Sentence: ' for q in questions]
+
     
 
         max_len = 0
@@ -273,13 +395,20 @@ class LanguageDecoder(nn.Module):
             if questions is not None:
                 cur_q = self._tokenize(questions[i], device=device)[:-1] # remove eos token
                 cur_q_embed = self.embed_tokens(cur_q)
+                
+                if self.use_lip_feats:
+                    cur_l_embed = lip_feats[i, :int(lip_masks[i].sum())].to(device) # [num_l_tokens, C]
+                    cur_inter_q = self._tokenize(inter_q[i], device=device)[1:-1]
+                    cur_inter_q_embed = self.embed_tokens(cur_inter_q)
 
                 if final_q is not None:
                     cur_final_q = self._tokenize(final_q[i], device=device)[1:-1]
                     cur_final_q_embed = self.embed_tokens(cur_final_q)
 
             if questions is not None:
-                if final_q is not None:
+                if inter_q is not None:
+                    cur_embed = torch.cat([cur_q_embed, cur_l_embed, cur_inter_q_embed, cur_v_embed, cur_final_q_embed], dim=0)
+                elif final_q is not None:
                     cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed], dim=0)
                 else:
                     cur_embed = torch.cat([cur_q_embed, cur_v_embed], dim=0) # [num_q_tokens + num_v_tokens + num_s_tokens, C]            
@@ -318,13 +447,13 @@ class LanguageDecoder(nn.Module):
 
         return inputs_embeds, attn_masks, position_ids
 
-    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None):
+    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
         outputs_list = []
         gen_sentences_list = None
         labels_list = []
         avg_conf_list = []
 
-        outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev)    
+        outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)    
         outputs_list.append(outputs)
         labels_list.append(labels)
 
@@ -334,7 +463,7 @@ class LanguageDecoder(nn.Module):
             
         if self.oracle and self.sub_sub and not self.training:
             self.sub_sub = False
-            outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev)
+            outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
             self.sub_sub = True
             outputs_list.append(outputs)
             labels_list.append(labels)
@@ -346,19 +475,19 @@ class LanguageDecoder(nn.Module):
         return outputs_list, labels_list, gen_sentences_list, avg_conf_list
 
 
-    def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None):
-        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description)
+    def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
+        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:
-            gen_sentences, avg_conf = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev)
+            gen_sentences, avg_conf = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
         else:
             gen_sentences = None
             avg_conf = None
             
         return outputs, labels, gen_sentences, avg_conf
     
-    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, background_description=None, rec_prev=None):
-        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev)
+    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
+        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id, return_dict_in_generate=True, output_scores=True)
 
         scores = self.decoder.compute_transition_scores(outputs['sequences'], outputs['scores'], normalize_logits=True)

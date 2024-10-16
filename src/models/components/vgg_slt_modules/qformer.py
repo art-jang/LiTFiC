@@ -31,11 +31,18 @@ class FourierPositionalEmbedding(nn.Module):
         return pe
 
 class QFormer(nn.Module):
-    def __init__(self, num_tokens, token_dim, memory_dim, num_layers, num_heads, max_memory_pos=500, use_fourier_embeddings=False):
+    def __init__(self, num_tokens, token_dim, memory_dim, num_layers, num_heads, max_memory_pos=500, use_fourier_embeddings=False, project_after=False):
         super(QFormer, self).__init__()
         self.token_dim = token_dim
         self.num_tokens = num_tokens
 
+        self.project_after = project_after
+
+        if project_after:
+            self.post_projector = nn.Linear(memory_dim, token_dim)
+            token_dim = memory_dim
+            self.token_dim = memory_dim
+            
         # Learnable tokens
         self.learnable_tokens = nn.Parameter(torch.randn(num_tokens, token_dim))
         
@@ -91,5 +98,8 @@ class QFormer(nn.Module):
         for layer in self.decoder_layers:
             # Pass the tokens through the decoder layer with memory
             tokens = layer(tokens, memory, memory_key_padding_mask=memory_mask)
+        
+        if self.project_after:
+            tokens = self.post_projector(tokens)
         
         return tokens

@@ -5,6 +5,9 @@ from collections import defaultdict
 
 def compress_and_average(strings, numbers):
     # Step 2: Create a dictionary to collect numbers associated with each string
+    if len(strings) == 0:
+        return [], []
+
     data = defaultdict(list)
     for string, number in zip(strings, numbers):
         data[string].append(number)

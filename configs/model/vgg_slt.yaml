@@ -39,6 +39,7 @@ net:
       num_layers: 2
       max_memory_pos: 500
       use_fourier_embeddings: False
+      project_after: False
     pooling_config:
       adaptive_pool: False
       early_fusion: False
@@ -53,17 +54,30 @@ net:
   llm_config:
     pretrained_llm: ${paths.llm_root}
     gradient_checkpointing_enable: True
-    freeze_decoder: True
-    oracle: True
+    freeze_decoder: False
+    oracle: False
     lora: True
-    sub_sub: True
+    sub_sub: False
     use_pl_probs: False
     use_pl_w_feats: False
     mix_in_pls: False
     mix_in_pls_prob: 0.5
+    mix_in_prev_prob: 0.5
+    mix_in_bg_prob: 0.5
     bg_desc: False
     use_bg_w_sub: False
     use_rec_prev: False
+    min_prev_conf: 0.0
+    use_bg_words: False
+    drop_bg_sw: False
+    use_man_gloss: False
+    ret_sent: False
+    mix_in_ret_prob: 0.0
+    use_lip_feats: False
+    mix_in_lip_prob: 0.0
+    use_prev_pls: False
+    use_prev_pls_probs: False
+    mix_in_prev_pls: 0.0
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16
@@ -114,7 +128,10 @@ net:
       same_text_ll: False
       same_video_ll: False
       avg_baseline: True
-
+  lip_encoder:
+    _target_: src.models.components.vgg_slt_modules.lip_projector.LipEncoder
+    lip_feat_dim: 512
+    out_dim: 4096
 # compile model for faster training with pytorch 2.0
 compile: false
 frames_path: ${paths.rgb_frames}

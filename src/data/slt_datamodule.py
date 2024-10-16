@@ -96,23 +96,33 @@ class SLTDataModule(LightningDataModule):
 
         :return: The validation dataloader.
         """
-
-        rank = torch.distributed.get_rank()
-        world_size = torch.distributed.get_world_size()
+        
+        rank = self.trainer.global_rank
+        world_size = self.trainer.world_size
 
         total_episodes = len(self.val_episode_ind["idx"])
         episodes_per_gpu = total_episodes // world_size
         start_index = episodes_per_gpu * rank
         end_index = start_index + episodes_per_gpu if rank != world_size - 1 else total_episodes
 
+        if len(self.data_val) < self.val_episode_ind["idx"][-1]:
+            return DataLoader(
+                dataset=self.data_val,
+                batch_size=1,
+                num_workers=self.hparams.num_workers,
+                pin_memory=self.hparams.pin_memory,
+                shuffle=False,
+                collate_fn=self.collate_fn,
+            )
+
         # Get the actual dataset indices
 
         dataset_start_idx = self.val_episode_ind["idx"][start_index]
 
-        if self.eval_data_size > 0:
+        if self.eval_data_size > 0 and not self.trainer.testing:
             dataset_end_idx = dataset_start_idx + (self.eval_data_size // world_size)
         else:
-            dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.dat_val)
+            dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.data_val)
 
 
         dataset = Subset(self.data_val, range(dataset_start_idx, dataset_end_idx))
@@ -131,13 +141,32 @@ class SLTDataModule(LightningDataModule):
 
         :return: The test dataloader.
         """
+        rank = self.trainer.global_rank
+        world_size = self.trainer.world_size
+
+        total_episodes = len(self.val_episode_ind["idx"])
+        episodes_per_gpu = total_episodes // world_size
+        start_index = episodes_per_gpu * rank
+        end_index = start_index + episodes_per_gpu if rank != world_size - 1 else total_episodes
+
+        # Get the actual dataset indices
+
+        dataset_start_idx = self.val_episode_ind["idx"][start_index]
+
+
+        dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.data_val)
+
+
+        dataset = Subset(self.data_val, range(dataset_start_idx, dataset_end_idx))
+
         return DataLoader(
-            dataset=self.data_test,
-            batch_size=self.batch_size_per_device,
+            dataset=dataset,
+            batch_size=1,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
+            sampler=None
         )
 
     def ret_dataloader(self) -> DataLoader[Any]:

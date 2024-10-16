@@ -8,7 +8,26 @@ import numpy as np
 from typing import Optional
 from torch.utils.data import Dataset
 import math
-from src.utils.data_utils import unique_ordered_list
+from src.utils.data_utils import unique_ordered_list, sample_sub_prev
+
+from einops import rearrange
+from operator import itemgetter
+
+import os
+import random
+from src.data.components.lmdb_loader import LMDBLoader
+# import contractions
+import re
+# import spacy
+import torch
+from tqdm import tqdm
+
+def remove_punctuation(text):
+    punctuation_pattern = r'[^\w\s]'  # Matches any character that is not a word character or whitespace
+    text_without_punctuation = re.sub(punctuation_pattern, '', text)
+
+    return text_without_punctuation
+
 
 class Subtitles(Dataset):
     """Generic dataset to load subtitles from data files"""
@@ -31,6 +50,23 @@ class Subtitles(Dataset):
         verbose: bool = False,
         blip_cap_path: Optional[str] = None,
         filter_blip: bool = False,
+        aug_prev: bool = False,
+        aug_prev_pct: float = 0.5,
+        aug_prev_shuffle: bool = False,
+        man_gloss_path=None,
+        use_man_gloss=False,
+        cslr2_pl_type=None,
+        sent_ret_n = 20,
+        train_sent_ret_path = None,
+        val_sent_ret_path = None,
+        filter_based_on_pls = False,
+        pl_configs: Optional[dict] = None,
+        pl_filter: Optional[float] = None,
+        pl_min_count: Optional[int] = None,
+        pl_synonym_grouping: Optional[bool] = None,
+        synonyms_pkl: Optional[str] = None,
+        vocab_pkl: Optional[str] = None,
+
     ):
         """
         Args:
@@ -62,10 +98,19 @@ class Subtitles(Dataset):
         self.text_augmentations = text_augmentations
         if self.verbose:
             print(f"Loading {self.setname} subtitles.")
-        with open(subtitles_path, "rb") as pickle_f:
-            self.subtitles = pickle.load(pickle_f)
-        if self.verbose:
-            print(f"Loaded {len(self.subtitles['episode_name'])} subtitles.")
+        
+        if not use_man_gloss:
+            with open(subtitles_path, "rb") as pickle_f:
+                self.subtitles = pickle.load(pickle_f)
+            if self.verbose:
+                print(f"Loaded {len(self.subtitles['episode_name'])} subtitles.")
+        else:
+            with open(os.path.join(man_gloss_path, f"{setname}.pkl"), "rb") as pickle_f:
+                self.subtitles = pickle.load(pickle_f)
+        
+        self.use_man_gloss = use_man_gloss
+            
+
         self.subtitles_temporal_shift = subtitles_temporal_shift
         self.subtitles_random_offset = subtitles_random_offset
         self.subtitles_temporal_pad = temporal_pad
@@ -80,6 +125,9 @@ class Subtitles(Dataset):
                         ) for x in val
                     ]
                 )
+            # else:
+            elif key in ["class_label", "class_prob", "nn_label", "nn_prob"]:
+                self.subtitles[key] = np.array(val, dtype=object)
             else:
                 self.subtitles[key] = np.array(val)
         # filter by episodes
@@ -87,16 +135,18 @@ class Subtitles(Dataset):
             print(
                 f"Filtering to {self.setname} subtitles.",
             )
-        filtered_indices = np.where(
-            np.isin(self.subtitles["episode_name"], self.setname_episode),
-        )[0]
-        self.filter_subtitles(filtered_indices)
-
-        if filter_blip:
+        
+        if not use_man_gloss:
             filtered_indices = np.where(
-                np.isin(self.subtitles["episode_name"], self.blip_cap_data["video"]),
+                np.isin(self.subtitles["episode_name"], self.setname_episode),
             )[0]
             self.filter_subtitles(filtered_indices)
+
+        # if filter_blip:
+        #     filtered_indices = np.where(
+        #         np.isin(self.subtitles["episode_name"], self.blip_cap_data["video"]),
+        #     )[0]
+        #     self.filter_subtitles(filtered_indices)
         # filter by duration
         if self.verbose:
             print(
@@ -113,6 +163,137 @@ class Subtitles(Dataset):
             )[0],
         )
         self.filter_subtitles(filtered_indices)
+
+        
+
+        if filter_based_on_pls and setname == "train":
+            filtered_indices = np.load(f"filtered_indices_pls_{setname}.npy")
+            self.filter_subtitles(filtered_indices)
+            print(f"Filtered based on pseudo-labels. {len(filtered_indices)} subtitles left.")
+            # filtered_indices = []
+            # nlp = spacy.load("en_core_web_sm")
+
+            # self.pseudo_label = LMDBLoader(
+            #     **pl_configs,
+            #     load_type="pseudo-labels",
+            #     verbose=verbose
+            # )
+            
+            # msg = "vocab_pkl must be provided if load_pl is True"
+            # assert vocab_pkl is not None, msg
+            # self.vocab = pickle.load(open(vocab_pkl, "rb"))
+            # if "words_to_id" in self.vocab.keys():
+            #     self.vocab = self.vocab["words_to_id"]
+            # self.vocab_size = len(self.vocab)
+            # self.vocab["bos"] = self.vocab_size
+            # self.vocab["eos"] = self.vocab_size + 1
+            # self.vocab["<pad>"] = self.vocab_size + 2  # <pad> as 'pad' in vocab
+            # self.vocab["no annotation"] = -1  # dummy class for no annotation
+            # self.inverted_vocab = {v: k for k, v in self.vocab.items()}
+
+            # self.synonym_grouping = pl_synonym_grouping
+            # if self.synonym_grouping:
+            #     msg = "synonyms_pkl must be provided if synonym_grouping is True"
+            #     assert synonyms_pkl is not None, msg
+            #     self.synonyms_dict = pickle.load(open(synonyms_pkl, "rb"))
+            #     self.fix_synonyms_dict()
+            # self.pl_filter = pl_filter
+            # self.pl_min_count = pl_min_count
+
+            # for i in tqdm(range(len(self.subtitles["episode_name"])), desc="Filtering pseudo-labels", total=len(self.subtitles["episode_name"])):
+            #     video_name = self.subtitles["episode_name"][i] + ".mp4"
+            #     sub_start = self.subtitles["start"][i] - self.subtitles_temporal_pad
+            #     sub_end = self.subtitles["end"][i] + self.subtitles_temporal_pad
+            #     labels, probs = self.pseudo_label.load_sequence(episode_name=video_name,begin_frame=int(sub_start * self.fps),end_frame=int(sub_end * self.fps),)
+                
+            #     if self.synonym_grouping:
+            #         words = itemgetter(
+            #             *rearrange(labels.numpy(), "t k -> (t k)")
+            #         )(self.inverted_vocab)
+            #         words = rearrange(
+            #             np.array(words), "(t k) -> t k", k=5,
+            #         )
+            #         new_words, new_probs = [], []
+            #         for word, prob in zip(words, probs):
+            #             new_prob, new_word = self.synonym_combine(word, prob)
+            #             new_words.append(new_word)
+            #             new_probs.append(new_prob)
+            #         new_words = rearrange(np.array(new_words), "t k -> (t k)")
+            #         labels = itemgetter(*new_words)(self.vocab)
+            #         labels = rearrange(torch.tensor(labels), "(t k) -> t k", k=5)
+            #         probs = torch.stack(new_probs)
+            #     # filter
+            #     # get indices of annots occuring at least pl_min_count times
+            #     if self.pl_min_count > 1:
+            #         # torch-based method
+            #         _, counts = torch.unique_consecutive(labels[:, 0], return_counts=True)
+            #         repeated_counts = torch.repeat_interleave(counts, counts)
+            #         min_count_indices = torch.where(repeated_counts >= self.pl_min_count)[0]
+            #     else:
+            #         min_count_indices = torch.arange(start=0, end=len(labels))
+
+            #     # get dictionnary of annotation
+            #     annotation_dict, target_dict = {}, {}
+            #     for annotation_idx, (prob, label) in enumerate(zip(probs, labels)):
+            #         prob = prob[0].item()
+            #         label = label[0].item()
+            #         correct_annotation_idx = int(
+            #             annotation_idx * self.pseudo_label.lmdb_stride / \
+            #                 (2 * self.pseudo_label.load_stride)
+            #         )
+            #         if prob >= self.pl_filter and annotation_idx in min_count_indices:
+            #             try:
+            #                 target_dict[correct_annotation_idx].append(label)
+            #             except KeyError:
+            #                 target_dict[correct_annotation_idx] = [label]
+            #             annotation_list = [
+            #                 int(int(sub_start * self.fps) + correct_annotation_idx),
+            #                 "pseudo-label", prob,
+            #             ]
+            #             try:
+            #                 annotation_dict[label].append(annotation_list)
+            #             except KeyError:
+            #                 annotation_dict[label] = [annotation_list]
+            #     # video augmentation
+            #     pls = [self.inverted_vocab[x[0]] for x in list(target_dict.values())]
+            #     unique_pls = list(set(pls))
+            #     sub = self.subtitles["subtitle"][i]
+            #     sub = contractions.fix(sub)
+            #     sub = remove_punctuation(sub)
+            #     sub = sub.lower()
+                
+            #     # at least one pl in the subtitles
+            #     words = nlp(sub)
+            #     for word in words:
+            #         if word.lemma_ in unique_pls:
+            #             filtered_indices.append(i)
+            #             break
+
+            # if len(filtered_indices) > 0:
+            #     filtered_indices = np.array(filtered_indices)
+            #     np.save(f"filtered_indices_pls_{setname}.npy", filtered_indices)
+            #     self.filter_subtitles(filtered_indices)
+            
+
+
+        if setname == "train":
+            with open(train_sent_ret_path, "rb") as f:
+                self.sent_ret = pickle.load(f)
+        else:
+            with open(val_sent_ret_path, "rb") as f:
+                self.sent_ret = pickle.load(f)
+        
+        if "id" in self.subtitles.keys():
+        # filtering sent_ret
+            filtered_indices = np.where(
+                np.isin(self.subtitles["id"], list(self.sent_ret.keys())),
+            )[0]
+
+            self.filter_subtitles(filtered_indices)
+
+        self.aug_prev = aug_prev
+        self.aug_prev_pct = aug_prev_pct
+        self.aug_prev_shuffle = aug_prev_shuffle
 
         self.info_file_idx = {}
         with open(info_pkl, "rb") as pickle_f:
@@ -147,6 +328,59 @@ class Subtitles(Dataset):
                 self.question_pool = [line.strip() for line in f.readlines()]
         else:
             self.question_pool = None
+        
+        self.cslr2_pl_type = cslr2_pl_type
+
+        self.sent_ret_n = sent_ret_n
+        
+        
+    def fix_synonyms_dict(self) -> None:
+        """
+        Make sure that the synonyms dictionary satisfies the following:
+            - if a is a synonym of b, then b is a synonym of a
+            - a is a synonym of a
+        """
+        for word, syns in self.synonyms_dict.items():
+            if word not in syns:
+                syns.append(word)
+                # need to check that for each synonym in the list
+                # the word is in the list of synonyms for that synonym
+            for syn in syns:
+                if word not in self.synonyms_dict[syn]:
+                    self.synonyms_dict[syn].append(word)
+
+    def synonym_combine(self, labels: np.ndarray, probs: torch.Tensor):
+        """
+        Function to aggregate probs of synonyms
+        """
+        change = False
+        new_probs = []
+        for anchor_idx, anchor in enumerate(labels):
+            try:
+                anchor = anchor.replace("-", " ")
+                syns = self.synonyms_dict[anchor]
+                anchor_new_prob = 0
+                for checked_idx, checked_label in enumerate(labels):
+                    checked_label = checked_label.replace("-", " ")
+                    if checked_label in syns:
+                        anchor_new_prob += probs[checked_idx]
+                    if checked_idx != anchor_idx:
+                        change = True
+                new_probs.append(anchor_new_prob)
+            except KeyError:
+                # prediction not in the synonym list
+                new_probs.append(probs[anchor_idx])
+        if change:
+            # need to sort
+            sorted_indices = torch.argsort(- 1 * torch.tensor(new_probs))
+            new_probs = torch.tensor(new_probs)[sorted_indices]
+            labels = np.array(labels)[sorted_indices]
+        else:
+            new_probs = torch.tensor(new_probs)
+            labels = np.array(labels)
+        return new_probs, labels
+
+        
     @staticmethod
     def convert_strtime_to_seconds(
         time: str, temporal_shift: float,
@@ -240,6 +474,8 @@ class Subtitles(Dataset):
         subtitles, sub_starts, sub_ends, video_names = subtitle, sub_start, sub_end, video_name
 
         previous_context = None
+        prev_start = []
+        prev_end = []
         if self.max_previous_sentences > 0:
             previous_context = ""
             # if self.setname == "train":
@@ -249,11 +485,23 @@ class Subtitles(Dataset):
             for i in range(num_sentences):
                 if idx - i - 1 < 0:
                     break
-                if i == 0:
-                    previous_context = self.subtitles["subtitle"][idx - i - 1]
+                if self.subtitles["episode_name"][idx - i - 1] != self.subtitles["episode_name"][idx]:
+                    continue
+                prev_text = self.subtitles["subtitle"][idx - i - 1] if not self.aug_prev else sample_sub_prev(self.subtitles["subtitle"][idx - i - 1], pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
+                prev_start.append(self.subtitles["start"][idx - i - 1])
+                prev_end.append(self.subtitles["end"][idx - i - 1])
+                if previous_context is None:
+                    previous_context = prev_text
                 else:
-                    previous_context = self.subtitles["subtitle"][idx - i - 1] + ' ' + previous_context
+                    previous_context = prev_text + ' ' + previous_context
+        
+        for i in range(len(prev_start)):
+            if prev_end[i] - prev_start[i] <= 0.5:
+                prev_start[i] = max(0, prev_end - 1.0)
 
+        man_gloss = None
+        if self.use_man_gloss:
+            man_gloss = self.subtitles["man_gloss"][idx].strip().split()
         question = None
         if self.question_pool is not None:
             if self.setname == "train":
@@ -274,6 +522,40 @@ class Subtitles(Dataset):
         except:
             bg_description = 'No description available.'
         
+
+        cslr2_labels = None
+        cslr2_probs = None
+        
+        if "nn_label" in self.subtitles.keys():
+            if self.cslr2_pl_type == "nn":
+                label_key = "nn_label"
+                prob_key = "nn_prob"
+            else:
+                label_key = "class_label"
+                prob_key = "class_prob"
+            
+            cslr2_labels = self.subtitles[label_key][idx][0]
+            cslr2_probs = self.subtitles[prob_key][idx][0]
+        
+        ret_sent = ""
+        if "id" in self.subtitles.keys():
+            if self.setname == "train":
+                ret_sent = self.sent_ret[self.subtitles["id"][idx]]
+                # select an index at random from ret_sent in the top self.sent_ret_n
+                if len(ret_sent) > 0:
+                    ret_sent = random.choice(ret_sent[:self.sent_ret_n])
+                else:
+                    ret_sent = ""
+            
+            else:
+                ret_sent = self.sent_ret[self.subtitles["id"][idx]]
+                # select the first index from ret_sent in the top self.sent_ret_n
+                if len(ret_sent) > 0:
+                    ret_sent = ret_sent[0]
+                else:
+                    ret_sent = ""
+
+        
         return {
             "subtitle": subtitles,
             "sub_start": sub_starts,
@@ -281,5 +563,12 @@ class Subtitles(Dataset):
             "video_name": video_names,
             "previous_context": previous_context,
             "question": question,
-            "bg_description": bg_description    
+            "bg_description": bg_description,   
+            "man_gloss": man_gloss,
+            "cslr2_labels": cslr2_labels,
+            "cslr2_probs": cslr2_probs,
+            "ret_sent": ret_sent,
+            "id": self.subtitles["id"][idx] if "id" in self.subtitles.keys() else None,
+            "prev_start": prev_start,
+            "prev_end": prev_end,
         }

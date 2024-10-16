@@ -18,6 +18,7 @@ class VggSLTNet(nn.Module):
         cslr2_config: dict,
         load_features: bool = False,
         precision: bool = "float32",
+        lip_encoder = None,
     ) -> None:
         """Initialize a `SimpleDenseNet` module.
 
@@ -32,6 +33,7 @@ class VggSLTNet(nn.Module):
         # self.visual_encoder = VisualEncoder(**visual_encoder_config, load_features=load_features, precision=precision)
         self.mm_projector = MMProjector(cslr2_config, **mm_projector_config)
         self.language_decoder = LanguageDecoder(**llm_config, precision=precision)
+        # self.lip_encoder = lip_encoder
 
 
     def forward(self, batch: dict, predict = False, ret = False) -> torch.Tensor:
@@ -41,19 +43,30 @@ class VggSLTNet(nn.Module):
         subtitles = batch["subtitles"]
         questions = batch["questions"] if batch["questions"][0] is not None else None
         previous_contexts = batch["previous_contexts"] if batch["previous_contexts"][0] is not None else None
+        man_gloss = batch["man_gloss"] if batch["man_gloss"][0] is not None else None
 
         target_indices = batch["target_indices"]
         target_labels = batch["target_labels"]
         pls = batch["pls"]
         sub_gt = batch["sub_gt"]
         probs = batch["probs"]
+        ret_sent = batch["ret_sent"]
 
         try:
             rec_prev = batch["rec_prev"]
+            rec_prev_conf = batch["rec_prev_conf"]
         except:
             rec_prev = []
+            rec_prev_conf = []
 
         background_description = batch["bg_description"]
+
+        lip_feats = batch["lip_feats"]
+        lip_masks = batch["attn_masks_lip"] 
+
+        prev_pls = batch["prev_pls"]
+        prev_pls_probs = batch["prev_pls_probs"]
+
 
         # x = self.visual_encoder(x, masks)
         if self.load_features:        
@@ -67,6 +80,11 @@ class VggSLTNet(nn.Module):
         x = x.to(self.language_decoder.torch_dtype)
         masks = masks.to(self.language_decoder.torch_dtype)
 
+        if lip_feats is not None:
+            lip_feats, lip_masks = self.lip_encoder(lip_feats, lip_masks)
+            lip_feats = lip_feats.to(self.language_decoder.torch_dtype)
+            lip_masks = lip_masks.to(self.language_decoder.torch_dtype)
+
         outputs, labels, gen_sentences, avg_conf = self.language_decoder(x, 
                                                 video_masks=masks,
                                                 subtitles=subtitles,
@@ -77,7 +95,15 @@ class VggSLTNet(nn.Module):
                                                 probs=probs,
                                                 ret=ret,
                                                 background_description=background_description,
-                                                rec_prev=rec_prev)
+                                                rec_prev=rec_prev,
+                                                rec_prev_conf=rec_prev_conf,
+                                                man_gloss=man_gloss,
+                                                ret_sent=ret_sent,
+                                                lip_feats=lip_feats,
+                                                lip_masks=lip_masks,
+                                                prev_pls=prev_pls,
+                                                prev_pls_probs=prev_pls_probs
+                                                )
         return outputs, labels, gen_sentences, avg_conf
 
 
