@@ -4,10 +4,11 @@ num_workers: 0
 pin_memory: True
 collate_fn: src.data.components.sentence.collate_fn_padd_t
 dataset: bobsl
-eval_data_size: 832
+eval_data_size: -1
 train_data_fraction: 1.0
 ret_data_size: 100
 val_episode_ind_path: ${paths.val_episode_ind_path} 
+test_setname: val
 dataset_config:
   # general parameters to load sentences associated to subtitles
   subset2episode: ${paths.subset2episode}
@@ -24,6 +25,11 @@ dataset_config:
   subtitles_random_offset: 0.5
   fps: 25
 
+  train_cap_prob: 0.0
+  train_cap_path: ${paths.train_cap_path}
+
+  aligned_subtitles_path: ${paths.aligned_subtitles_path}
+
   # parameters to load video features
   load_features: True
   feats_lmdb: ${paths.vid_features_lmdb}
@@ -31,7 +37,7 @@ dataset_config:
   feats_load_float16: True
   feats_lmdb_window_size: 16
   feats_lmdb_stride: 2
-  feats_dim: 768
+  feats_dim: ${model.net.mm_projector_config.mm_hidden_size}
   video_augmentations: null
 
   # parameters to load video pseudo-labels
@@ -66,6 +72,11 @@ dataset_config:
   aug_prev_pct: 0.5
   aug_prev_shuffle: False
 
+  aug_prev_neg: False
+  aug_prev_neg_prob: 0.0
+
+  sub_syn_aug_prob: 0.0
+
   man_gloss_path: ${paths.man_gloss_path}
   use_man_gloss: False
 
@@ -82,3 +93,5 @@ dataset_config:
   lip_feats_path: ${paths.lip_feats_path}
 
   filter_based_on_pls: False
+
+  spottings_path: ${paths.spottings_path}

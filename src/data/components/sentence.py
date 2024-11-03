@@ -14,9 +14,10 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
-from src.utils.data_utils import sample_sub, cleanup_sub, process_cslr2_pls
+from src.utils.data_utils import sample_sub, cleanup_sub, process_cslr2_pls, replace_random_word_with_synonym, get_annotations_in_time_range
 from src.utils.cslr_tools import compress_and_average
 import os
+import random
 
 class Sentences(Dataset):
     """General dataset class to load sentences from data files"""
@@ -78,6 +79,13 @@ class Sentences(Dataset):
         val_sent_ret_path: Optional[str] = None,
         lip_feats_path: Optional[str] = None,
         filter_based_on_pls: Optional[bool] = False,
+        aug_prev_neg: Optional[bool] = False,
+        aug_prev_neg_prob: Optional[float] = 0.0,
+        sub_syn_aug_prob: Optional[float] = 0.0,
+        train_cap_path: Optional[str] = None,
+        train_cap_prob: Optional[float] = 0.0,
+        aligned_subtitles_path: Optional[str] = None,
+        spottings_path: Optional[str] = None,
     ):
         """
         Args:
@@ -168,6 +176,11 @@ class Sentences(Dataset):
             pl_synonym_grouping = pl_synonym_grouping,
             synonyms_pkl = synonyms_pkl,
             vocab_pkl = vocab_pkl,
+            aug_prev_neg = aug_prev_neg,
+            aug_prev_neg_prob = aug_prev_neg_prob,
+            train_cap_path = train_cap_path,
+            train_cap_prob = train_cap_prob,
+            aligned_subtitles_path = aligned_subtitles_path,
         )
         
         # features
@@ -247,6 +260,12 @@ class Sentences(Dataset):
             self.lip_feats = pickle.load(open(lip_feats_path, "rb"))
         else:
             self.lip_feats = None
+        
+        self.sub_syn_aug_prob = sub_syn_aug_prob
+
+        self.spottings = None
+        if spottings_path is not None:
+            self.spottings = pickle.load(open(spottings_path, "rb"))
         
 
 
@@ -542,6 +561,16 @@ class Sentences(Dataset):
             lip_feats = self.lip_feats[id] if self.lip_feats is not None else None
         else:
             lip_feats = None
+        
+        if random.random() < random.random() * self.sub_syn_aug_prob:
+            subtitle = replace_random_word_with_synonym(subtitle, self.synonyms_dict)
+        
+        # getting eccv 22 spottings
+        if self.spottings is not None:
+            spottings = get_annotations_in_time_range(self.spottings, video_name, sub_start, sub_end)
+            spottings = list(set(spottings))
+        else:
+            spottings = []
 
         return {
             "subtitle": cleanup_sub(subtitle),
@@ -565,6 +594,7 @@ class Sentences(Dataset):
             "prev_pls": prev_pls,
             "prev_pls_probs": prev_pls_probs,
             "id": id,
+            "spottings": spottings
         }
 
         '''
@@ -655,6 +685,7 @@ def collate_fn_padd_t(batch: List):
     prev_pls = [item["prev_pls"] for item in batch]
     prev_pls_probs = [item["prev_pls_probs"] for item in batch]
     ids = [item["id"] for item in batch]
+    spottings = [item["spottings"] for item in batch]
 
     padded_features, attn_masks = None, None
     if features[0] is not None:
@@ -686,6 +717,7 @@ def collate_fn_padd_t(batch: List):
         "prev_pls": prev_pls,
         "prev_pls_probs": prev_pls_probs,
         "ids": ids,
+        "spottings": spottings
     }
 
 

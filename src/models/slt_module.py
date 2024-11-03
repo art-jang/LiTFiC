@@ -25,6 +25,11 @@ from src.utils.vis_utils import save_video
 from src.utils.ret_utils import copy_tensor, calculate_average_logit_scores, calculate_retrieval_metrics, calculate_overlap_metrics
 from bleurt_pytorch import BleurtConfig, BleurtForSequenceClassification, BleurtTokenizer
 
+from nltk.stem import WordNetLemmatizer 
+from nltk.corpus import stopwords, wordnet
+import nltk
+import pickle
+
 
 
 class SLTLitModule(LightningModule):
@@ -71,6 +76,7 @@ class SLTLitModule(LightningModule):
         output_dir: str,
         bleurt_path: str,
         context_len: int,
+        synonyms_pkl: str,
     ) -> None:
         """Initialize a `MNISTLitModule`.
 
@@ -101,6 +107,11 @@ class SLTLitModule(LightningModule):
         self.rouge = Rouge()
         self.cider = Cider()
         self.tokenizer = PTBTokenizer()
+
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english'))
+
+        self.synonym_dict = pickle.load(open(synonyms_pkl, "rb"))
 
         self.all_preds=[]
         self.avg_confs=[] 
@@ -135,6 +146,66 @@ class SLTLitModule(LightningModule):
         # bleurt metric
         self.bleurt_model = BleurtForSequenceClassification.from_pretrained(bleurt_path)
         self.bleurt_tokenizer = BleurtTokenizer.from_pretrained(bleurt_path)
+    
+    def get_wordnet_pos(self, word):
+        tag = nltk.pos_tag([word])[0][1][0].upper()
+        tag_dict = {"J": wordnet.ADJ,
+                    "N": wordnet.NOUN,
+                    "V": wordnet.VERB,
+                    "R": wordnet.ADV}
+        return tag_dict.get(tag, wordnet.NOUN)
+
+    def incorporate_syns(self, gts, hyps):
+        # Lemmatize and remove stopwords
+
+        gt_final, hyp_final = [], []
+        
+
+        for gt, hyp in zip(gts, hyps):
+            gt_arr = gt.split()
+            hyp_arr = hyp.split()
+
+            gt_arr = [self.lemmatizer.lemmatize(word, self.get_wordnet_pos(word)) for word in gt_arr if word not in self.stop_words]
+            hyp_arr = [self.lemmatizer.lemmatize(word, self.get_wordnet_pos(word)) for word in hyp_arr if word not in self.stop_words]
+
+            hyp_no_repeats = []
+            hyp_no_synonynms_lexemes = []
+            hyp_match_gt =[]
+            synonymes_lexemes = []
+
+
+            if len(gt_arr) > 0:
+                gt_word_2_synonyms = {}
+                for gt_word in gt_arr:
+                    if gt_word in self.synonym_dict:
+                        gt_word_2_synonyms[gt_word] = self.synonym_dict[gt_word]
+                
+                for word in hyp_arr:
+                    if word not in hyp_no_repeats:
+                        hyp_no_repeats.append(word)
+                
+                for i, word in enumerate(hyp_no_repeats):
+                    if i == 0:
+                        hyp_no_synonynms_lexemes.append(word)
+                        if word in self.synonym_dict.keys():
+                            synonymes_lexemes += self.synonym_dict[word]
+                    if i !=0 and word not in synonymes_lexemes:
+                        hyp_no_synonynms_lexemes.append(word)
+                        if word in self.synonym_dict.keys():
+                            synonymes_lexemes += self.synonym_dict[word]
+                ### make the words in hyp match synonym lexeme of ground truth
+                for word in hyp_no_synonynms_lexemes:
+                    matched_word = word
+                    for key in gt_word_2_synonyms.keys():
+                        if word in gt_word_2_synonyms[key]:
+                            matched_word = key
+                    hyp_match_gt.append(matched_word)
+                
+
+                gt_final.append(" ".join(gt_arr))
+                hyp_final.append(" ".join(hyp_match_gt))
+            
+        return gt_final, hyp_final
     
     def predict_step(self, batch, batch_idx):
         pass
@@ -319,7 +390,10 @@ class SLTLitModule(LightningModule):
             self.rec_prev_conf.extend(batch['rec_prev_conf'])
             self.prev_pls.extend(batch['prev_pls'])
             self.prev_pls_probs.extend(batch['prev_pls_probs'])
-            self.ids.extend(batch['ids'])
+            try:
+                self.ids.extend([int(x) for x in batch['ids']])
+            except:
+                self.ids.extend(batch['ids'])
             # if batch['previous_contexts'] is not None:
             #     self.prev_context.extend(batch['previous_contexts'])
 
@@ -348,38 +422,114 @@ class SLTLitModule(LightningModule):
     def on_train_epoch_end(self) -> None:
         pass
 
+    def gather_and_concatenate(self, tensor: torch.Tensor, dim: int = 0, pad_value: float = 0.0) -> torch.Tensor:
+        """
+        Gathers tensors of variable size across all processes and concatenates them into a single tensor.
+
+        Args:
+            tensor (torch.Tensor): The tensor to gather from each process.
+            dim (int): The dimension along which to gather and concatenate. Default is 0.
+            pad_value (float): The value used for padding smaller tensors. Default is 0.0.
+
+        Returns:
+            torch.Tensor: A concatenated tensor containing all tensors from all processes.
+        """
+        # Step 1: Gather the size of the tensor along the specified dimension from all processes
+        tensor_size = torch.tensor([tensor.size(dim)], device=tensor.device)
+        gathered_sizes = self.all_gather(tensor_size)  # Shape: [world_size, 1]
+        sizes = gathered_sizes.squeeze(1).tolist()     # Convert to list of integers
+
+        # Step 2: Determine the maximum size across all tensors
+        max_size = max(sizes)
+
+        # Step 3: Pad the tensor if it's smaller than the maximum size
+        if tensor.size(dim) < max_size:
+            pad_amount = max_size - tensor.size(dim)
+            # Create a padding tensor filled with pad_value
+            pad_shape = list(tensor.size())
+            pad_shape[dim] = pad_amount
+            padding = torch.full(pad_shape, pad_value, dtype=tensor.dtype, device=tensor.device)
+            # Concatenate the padding to the original tensor
+            padded_tensor = torch.cat([tensor, padding], dim=dim)
+        else:
+            padded_tensor = tensor
+
+        # Step 4: Perform all_gather on the padded tensors
+        gathered_padded = self.all_gather(padded_tensor)  # Shape: [world_size, *padded_tensor.shape]
+
+        # Step 5: Remove padding and collect tensors
+        # Initialize a list to hold the unpadded tensors
+        unpadded_tensors = []
+        for i, size in enumerate(sizes):
+            if dim == 0:
+                # Slice along the first dimension
+                unpadded = gathered_padded[i, :size]
+            else:
+                # Create slicing objects for other dimensions
+                slices = [slice(None)] * gathered_padded.dim()
+                slices[dim] = slice(0, size)
+                unpadded = gathered_padded[i][tuple(slices)]
+            unpadded_tensors.append(unpadded)
+
+        # Step 6: Concatenate all unpadded tensors along the specified dimension
+        concatenated = torch.cat(unpadded_tensors, dim=dim)
+
+        return concatenated
+
     def get_cap_metrics(self, idx = 0):
+
+        if self.trainer.testing and len(self.all_preds) > 100000:
+
+            cap_dict = {
+                "gt": self.all_gts,
+                "pred": self.all_preds[idx],
+                "ids": self.ids,
+            }
+            os.makedirs(f"{self.vis_dir}/{self.current_epoch}", exist_ok=True)
+            with open(f"{self.vis_dir}/{self.current_epoch}/cap_{self.global_rank}.json", 'w') as f:
+                json.dump(cap_dict, f)
+            
+            return 0, 0, 0, 0, 0, 0, 0
+
         
         tensor_preds = strings_to_tensor(self.all_preds[idx])
         tensor_gt = strings_to_tensor(self.all_gts)
 
-        m_preds_tensor = self.all_gather(tensor_preds)
-        m_gt_tensor = self.all_gather(tensor_gt)
+        # m_preds_tensor = self.all_gather(tensor_preds)
+        # m_gt_tensor = self.all_gather(tensor_gt)
 
-        all_preds = tensor_to_strings(m_preds_tensor.view(-1, 1024))
-        all_gts = tensor_to_strings(m_gt_tensor.view(-1, 1024))
+        m_preds_tensor = self.gather_and_concatenate(tensor_preds)
+        m_gt_tensor = self.gather_and_concatenate(tensor_gt)
 
-        # hypotheses = {str(i): [{'image_id': str(i), 'id':str(i), 'caption': all_preds[i]}] for i in range(len(all_preds))}
-        # references = {str(i): [{'image_id': str(i), 'id':str(i), 'caption': all_gts[i]}] for i in range(len(all_gts))}
+        all_preds = tensor_to_strings(m_preds_tensor)
+        all_gts = tensor_to_strings(m_gt_tensor)
 
-        # hypotheses = self.tokenizer.tokenize(hypotheses)
-        # references = self.tokenizer.tokenize(references)
+        hypotheses = {str(i): [{'image_id': str(i), 'id':str(i), 'caption': all_preds[i]}] for i in range(len(all_preds))}
+        references = {str(i): [{'image_id': str(i), 'id':str(i), 'caption': all_gts[i]}] for i in range(len(all_gts))}
+
+        hypotheses = self.tokenizer.tokenize(hypotheses)
+        references = self.tokenizer.tokenize(references)
         
-        hypotheses = {'image'+str(i): [all_preds[i]] for i in range(len(all_preds))}
-        references = {'image'+str(i): [all_gts[i]] for i in range(len(all_gts))}
+        # hypotheses = {'image'+str(i): [all_preds[i]] for i in range(len(all_preds))}
+        # references = {'image'+str(i): [all_gts[i]] for i in range(len(all_gts))}
 
         bleu_score = self.bleu.compute_score(hypotheses, references)[0][3]
         rouge_score = self.rouge.compute_score(references, hypotheses)[0]
         cider_score = self.cider.compute_score(references, hypotheses)[0]
         bleurt_score = sum(self.get_bleurt_scores(all_gts, all_preds))/len(all_gts)
-        iou_list, precision_list, recall_list = calculate_overlap_metrics(all_gts, all_preds)
+
+        all_gts_f = [v[0] for k, v in references.items()]
+        all_preds_f = [v[0] for k, v in hypotheses.items()]
+
+        all_gts_f, all_preds_f = self.incorporate_syns(all_gts_f, all_preds_f)
+        iou_list, precision_list, recall_list = calculate_overlap_metrics(all_gts_f, all_preds_f)
         iou = sum(iou_list)/len(iou_list)
         precision = sum(precision_list)/len(precision_list)
         recall = sum(recall_list)/len(recall_list)
 
         try:
             id_tensor = torch.tensor(self.ids)
-            m_id_tensor = self.all_gather(id_tensor)
+            m_id_tensor = self.gather_and_concatenate(id_tensor)
             all_ids = m_id_tensor.view(-1).tolist() 
         except:
             all_ids = []
@@ -467,21 +617,21 @@ class SLTLitModule(LightningModule):
         for idx_p in range(len(self.all_preds)):
             bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall = self.get_cap_metrics(idx_p)
             if len(self.all_preds) > 1:
-                self.log(f"bleu_{idx_p}", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log(f"rouge_{idx_p}", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log(f"cider_{idx_p}", cider_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log(f"bleurt_{idx_p}", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log(f"iou_{idx_p}", iou, on_step=False, on_epoch=True, prog_bar=True)
-                self.log(f"precision_{idx_p}", precision, on_step=False, on_epoch=True, prog_bar=True)
-                self.log(f"recall_{idx_p}", recall, on_step=False, on_epoch=True, prog_bar=True)
+                self.log(f"bleu_{idx_p}", bleu_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log(f"rouge_{idx_p}", rouge_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log(f"cider_{idx_p}", cider_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log(f"bleurt_{idx_p}", bleurt_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log(f"iou_{idx_p}", iou, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log(f"precision_{idx_p}", precision, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log(f"recall_{idx_p}", recall, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
             else:
-                self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True)
-                self.log("iou", iou, on_step=False, on_epoch=True, prog_bar=True)
-                self.log("precision", precision, on_step=False, on_epoch=True, prog_bar=True)
-                self.log("recall", recall, on_step=False, on_epoch=True, prog_bar=True)
+                self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("iou", iou, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("precision", precision, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+                self.log("recall", recall, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
         ret_metrics_list = None
         # if not self.trainer.sanity_checking:
@@ -589,6 +739,10 @@ class SLTLitModule(LightningModule):
                 if isinstance(scheduler, LinearWarmupCosineAnnealingLR):
                     scheduler.max_epochs *= self.trainer.fit_loop._data_source.instance.max_steps
                     scheduler.warmup_epochs *= self.trainer.fit_loop._data_source.instance.max_steps # divide by num gpus
+
+                    n_gpus = self.trainer.num_nodes * self.trainer.num_devices
+                    scheduler.max_epochs //= n_gpus
+                    scheduler.warmup_epochs //= n_gpus
 
                     scheduler.max_epochs //= self.hparams.scheduler_options.divide_step
                     scheduler.warmup_epochs //= self.hparams.scheduler_options.divide_step

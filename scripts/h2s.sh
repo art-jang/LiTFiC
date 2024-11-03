@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=llama_feat_runs # job name
+#SBATCH --job-name=llama_h2s_runs # job name
 #SBATCH --account=ewl@h100                # project code
 #SBATCH -C h100
 #SBATCH --ntasks-per-node=4             # number of MPI tasks per node
 #SBATCH --nodes=1                      # number of nodes
 #SBATCH --gres=gpu:4                     # number of GPUs per node                         # number of nodes
-#SBATCH --qos=qos_gpu_h100-t4                  # (20h) jobs
+#SBATCH --qos=qos_gpu_h100-t3                  # (20h) jobs
 #SBATCH --cpus-per-task=15                 # number of cores per tasks
 #SBATCH --hint=nomultithread              # we get physical cores not logical
-#SBATCH --time=40:00:00                 # maximum execution time (HH:MM:SS)
+#SBATCH --time=5:00:00                 # maximum execution time (HH:MM:SS)
 #SBATCH --output=/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/slurm_logs/llama_%j.out # output file name
 #SBATCH --error=/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/slurm_logs/llama_%j.err  # error file name
 
@@ -28,15 +28,14 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 # paths.subtitles_path='/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/hy_data/acmmm_pseudo_subtitles_v3.pkl'\
-srun python src/train.py task_name=llama_feats_sw_all_spot experiment=llama3_haran paths=haran \
-    model.net.llm_config.bg_desc=True\
-    model.net.llm_config.use_pl_w_feats=False\
-    model.net.llm_config.use_rec_prev=True\
+srun python src/train.py task_name=llama_h2s_feat_conv_pls_b50 experiment=llama3_haran_how2sign paths=how2sign \
+    model.net.llm_config.bg_desc=False\
+    model.net.llm_config.use_pl_w_feats=True\
+    model.net.llm_config.use_rec_prev=False\
     model.net.llm_config.use_prev_pls=False\
     model.net.llm_config.ret_sent=False\
-    model.net.llm_config.use_gt_prev=True\
-    model.net.llm_config.use_spottings=True\
-    data.dataset_config.max_previous_sentences=0\
+    model.net.llm_config.oracle=False\
+    data.dataset_config.max_previous_sentences=1\
     data.dataset_config.filter_based_on_pls=False\
     data.dataset_config.aug_prev_neg=False\
     data.dataset_config.aug_prev_neg_prob=0.5\
@@ -50,12 +49,11 @@ srun python src/train.py task_name=llama_feats_sw_all_spot experiment=llama3_har
     model.net.llm_config.drop_bg_sw=True\
     model.context_len=1\
     model.net.llm_config.mix_in_ret_prob=1.0\
-    model.net.llm_config.mix_in_pls_prob=1.0\
+    model.net.llm_config.mix_in_pls_prob=0.5\
     model.net.llm_config.mix_in_prev_prob=1.0\
     model.net.llm_config.mix_in_bg_prob=1.0\
     model.net.llm_config.mix_in_prev_pls=1.0\
-    model.net.llm_config.mix_in_spottings=1.0\
     model.net.llm_config.drop_bgw_pct=0.0\
-    model.net.llm_config.drop_pl_pct=0.0\
+    model.net.llm_config.drop_pl_pct=0.5
 
 

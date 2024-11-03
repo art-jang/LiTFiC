@@ -30,7 +30,7 @@ net:
     mm_hidden_size: ${model.net.visual_encoder_config.out_dim}
     hidden_size: 3072
     projector_type: mlp2x_gelu
-    use_qformer: True
+    use_qformer: False
     qformer_config:
       num_tokens: 10
       token_dim: 4096
@@ -51,6 +51,7 @@ net:
       use: True
       ckpt_path: ${paths.cslr2_ckpt}
       freeze: True
+    dropout: 0.0
   llm_config:
     pretrained_llm: ${paths.llm_root}
     gradient_checkpointing_enable: True
@@ -78,6 +79,11 @@ net:
     use_prev_pls: False
     use_prev_pls_probs: False
     mix_in_prev_pls: 0.0
+    use_gt_prev: False
+    drop_bgw_pct: 0.0
+    drop_pl_pct: 0.0
+    use_spottings: False
+    mix_in_spottings: 0.0
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16
@@ -138,4 +144,5 @@ frames_path: ${paths.rgb_frames}
 output_dir: ${paths.output_dir}
 bleurt_path: ${paths.bleurt_path}
 context_len: 1
+synonyms_pkl: ${paths.synonyms_pkl}
 

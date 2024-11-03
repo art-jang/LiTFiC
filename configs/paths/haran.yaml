@@ -25,7 +25,7 @@ vid_features_lmdb: ../cslr2_t/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
 word_embds_pkl: ../cslr2_t/bobsl/vocab_embds/t5-large_8k_word_embeddings.pkl
 # subtitles_path: ../cslr2_t/bobsl/subtitles_pkl/best_delta_postpro_bobsl_best_traineval_0_pslab_ftune_.pkl 
 subtitles_path: ../cslr2_t/bobsl/cslr2_pls_v3.pkl
-aligned_subtitles_path: ../cslr2_t/bobsl/subtitles_pkl/manually_aligned.pkl
+aligned_subtitles_path: ../cslr2_t/bobsl/subtitles_pkl/manually-aligned.pkl
 synonyms_pkl: ../cslr2_t/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
 rgb_frames: ../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
 misaligned_csv_root: ../cslr2_t/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
@@ -42,3 +42,5 @@ man_gloss_path: ../cslr2_t/bobsl/manual_gloss/dense_annotations.06.09.24/
 train_sent_ret_path: ../cslr2_t/bobsl/train_sent_ret.pkl
 val_sent_ret_path: ../cslr2_t/bobsl/val_sent_ret.pkl
 lip_feats_path: ../cslr2_t/bobsl/lip_feats/lip_dict.pkl
+train_cap_path: feats_cslr2_pls50_bg50_train_cap_2.json
+spottings_path: ../cslr2_t/bobsl/spottings/spottings_eccv22.pkl

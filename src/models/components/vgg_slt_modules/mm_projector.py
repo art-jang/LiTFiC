@@ -19,19 +19,22 @@ class MMProjector(nn.Module):
                  hidden_size,
                  pooling_config,
                  cslr2_options,
+                 dropout=0.0,
                  **kwargs):
         super(MMProjector, self).__init__()
         self.projector_type = projector_type
+
+        self.dropout = nn.Dropout(dropout) if dropout > 0.0 else nn.Identity()
 
         self.use_cslr2 = cslr2_options.use
 
         if self.use_cslr2:
             self.cslr2 = cslr2_config
 
-        if cslr2_options.ckpt_path is not None:
+        if cslr2_options.ckpt_path is not None and self.use_cslr2:
             self.cslr2 = load_checkpoint_model(cslr2_options.ckpt_path, self.cslr2, 'cpu')
         
-        if cslr2_options.freeze:
+        if cslr2_options.freeze and self.use_cslr2:
             for name, param in self.cslr2.named_parameters():
                 param.requires_grad = False
         
@@ -51,6 +54,15 @@ class MMProjector(nn.Module):
         else:
             if projector_type == 'linear':
                 self.projector = nn.Linear(mm_hidden_size, hidden_size)
+            elif projector_type == 'conv':
+                self.projector = nn.Sequential(
+                    nn.Conv1d(mm_hidden_size, mm_hidden_size, kernel_size=5, padding=2),
+                    nn.ReLU(),
+                    nn.MaxPool1d(kernel_size=2, stride=2),
+                    nn.Conv1d(mm_hidden_size, mm_hidden_size, kernel_size=5, padding=2),
+                    nn.ReLU(),
+                    nn.MaxPool1d(kernel_size=2, stride=2),)
+                self.projector2 = nn.Linear(mm_hidden_size, hidden_size)
             else:
                 raise ValueError(f'Unknown projector type: {projector_type}')
 
@@ -128,10 +140,23 @@ class MMProjector(nn.Module):
 
             return x, masks
             
-        if self.early_fusion:
-            x, masks = self._pool(x, masks)
-            x = self.projector(x)
-        else:
-            x = self.projector(x)
-            x, masks = self._pool(x, masks)
+        # if self.early_fusion:
+        #     x, masks = self._pool(x, masks)
+        #     x = self.projector(x)
+        # else:
+        #     x = self.projector(x)
+        #     x, masks = self._pool(x, masks)
+
+        if self.projector_type == 'conv':
+            x = x.permute(0, 2, 1)
+        x = self.projector(x)
+        if self.projector_type == 'conv':
+            x = x.permute(0, 2, 1)
+            masks = torch.nn.functional.max_pool1d(masks, kernel_size=2, stride=2)
+            masks = torch.nn.functional.max_pool1d(masks, kernel_size=2, stride=2)
+            x = self.projector2(x)
+            
+        x = self.dropout(x)
+
+
         return x, masks

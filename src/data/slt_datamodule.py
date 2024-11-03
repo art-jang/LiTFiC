@@ -18,6 +18,7 @@ class SLTDataModule(LightningDataModule):
         ret_data_size: int = 500,
         train_data_fraction: int = 1.0,
         val_episode_ind_path: Optional[str] = None,
+        test_setname: str = "val",
     ) -> None:
         super().__init__()
 
@@ -32,8 +33,10 @@ class SLTDataModule(LightningDataModule):
         self.eval_data_size = eval_data_size
         self.train_data_fraction = train_data_fraction
         self.ret_data_size = ret_data_size
+        self.test_setname = test_setname
 
         self.val_episode_ind = None
+        self.val_episode_ind_path = val_episode_ind_path
         with open(val_episode_ind_path, 'r') as f:
             self.val_episode_ind = json.load(f)
 
@@ -46,14 +49,13 @@ class SLTDataModule(LightningDataModule):
             if self.hparams.dataset == 'bobsl':
                 from ..data.components.sentence import Sentences
                 self.data_train = Sentences(**self.hparams.dataset_config, setname="train")
-                self.data_val = Sentences(**self.hparams.dataset_config, setname="val")
+                self.data_val = Sentences(**self.hparams.dataset_config, setname="man_val")
                 self.data_ret = Subset(self.data_val,
                                     torch.randperm(
                                         len(self.data_val)
                                     )[:self.ret_data_size],
                                 )
-                self.data_test = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
-                len(self.data_val))[:self.eval_data_size])
+                self.data_test = Sentences(**self.hparams.dataset_config, setname=self.test_setname)
                 # self.data_val = Subset(Sentences(**self.hparams.dataset_config, setname="val"), torch.randperm(
                 # len(self.data_val))[:self.eval_data_size])
 
@@ -81,14 +83,20 @@ class SLTDataModule(LightningDataModule):
         """Create and return the train dataloader.
 
         :return: The train dataloader.
+
         """
+
+        if self.trainer.num_devices>1:
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                self.data_train, shuffle=True)
+        
         return DataLoader(
             dataset=self.data_train,
             batch_size=self.batch_size_per_device,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
-            shuffle=True,
             collate_fn=self.collate_fn,
+            sampler=sampler if self.trainer.num_devices > 1 else None
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -100,12 +108,17 @@ class SLTDataModule(LightningDataModule):
         rank = self.trainer.global_rank
         world_size = self.trainer.world_size
 
-        total_episodes = len(self.val_episode_ind["idx"])
+        if self.val_episode_ind_path.split("/")[-1] != "val_how2sign_indices.json":
+            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/val_start_indices_manual.json", "rb"))
+        else:
+            episode_ind = self.val_episode_ind
+
+        total_episodes = len(episode_ind["idx"])
         episodes_per_gpu = total_episodes // world_size
         start_index = episodes_per_gpu * rank
         end_index = start_index + episodes_per_gpu if rank != world_size - 1 else total_episodes
 
-        if len(self.data_val) < self.val_episode_ind["idx"][-1]:
+        if len(self.data_val) < episode_ind["idx"][-1]:
             return DataLoader(
                 dataset=self.data_val,
                 batch_size=1,
@@ -113,16 +126,17 @@ class SLTDataModule(LightningDataModule):
                 pin_memory=self.hparams.pin_memory,
                 shuffle=False,
                 collate_fn=self.collate_fn,
+                sampler=None
             )
 
         # Get the actual dataset indices
 
-        dataset_start_idx = self.val_episode_ind["idx"][start_index]
+        dataset_start_idx = episode_ind["idx"][start_index]
 
         if self.eval_data_size > 0 and not self.trainer.testing:
             dataset_end_idx = dataset_start_idx + (self.eval_data_size // world_size)
         else:
-            dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.data_val)
+            dataset_end_idx = episode_ind["idx"][end_index] if end_index < total_episodes else len(self.data_val)
 
 
         dataset = Subset(self.data_val, range(dataset_start_idx, dataset_end_idx))
@@ -134,6 +148,7 @@ class SLTDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
             collate_fn=self.collate_fn,
+            sampler=None
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
@@ -144,20 +159,30 @@ class SLTDataModule(LightningDataModule):
         rank = self.trainer.global_rank
         world_size = self.trainer.world_size
 
-        total_episodes = len(self.val_episode_ind["idx"])
+        episode_ind = self.val_episode_ind
+        if self.test_setname == "man_val":
+            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/val_start_indices_manual.json", "rb"))
+        
+        elif self.test_setname == "public_test":
+            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/test_start_indices.json", "rb"))
+        
+        elif self.test_setname == "train":
+            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/train_start_indices.json", "rb"))
+
+        total_episodes = len(episode_ind["idx"])
         episodes_per_gpu = total_episodes // world_size
         start_index = episodes_per_gpu * rank
         end_index = start_index + episodes_per_gpu if rank != world_size - 1 else total_episodes
 
         # Get the actual dataset indices
 
-        dataset_start_idx = self.val_episode_ind["idx"][start_index]
+        dataset_start_idx = episode_ind["idx"][start_index]
 
 
-        dataset_end_idx = self.val_episode_ind["idx"][end_index] if end_index < total_episodes else len(self.data_val)
+        dataset_end_idx = episode_ind["idx"][end_index] if end_index < total_episodes else len(self.data_test)
 
 
-        dataset = Subset(self.data_val, range(dataset_start_idx, dataset_end_idx))
+        dataset = Subset(self.data_test, range(dataset_start_idx, dataset_end_idx))
 
         return DataLoader(
             dataset=dataset,

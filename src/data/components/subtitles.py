@@ -66,7 +66,11 @@ class Subtitles(Dataset):
         pl_synonym_grouping: Optional[bool] = None,
         synonyms_pkl: Optional[str] = None,
         vocab_pkl: Optional[str] = None,
-
+        aug_prev_neg: Optional[bool] = False,
+        aug_prev_neg_prob: Optional[float] = 0.0,
+        train_cap_path: Optional[str] = None,
+        train_cap_prob: Optional[float] = 0.0,
+        aligned_subtitles_path: Optional[str] = None,
     ):
         """
         Args:
@@ -87,19 +91,27 @@ class Subtitles(Dataset):
             fps (int): fps of the videos associated to the subtitles.
             verbose: (bool, optional): verbosity.
         """
-        with open(blip_cap_path, 'rb') as f:
-            self.blip_cap_data = pickle.load(f)
+        self.blip_cap_data = None
+        if blip_cap_path is not None:
+            with open(blip_cap_path, 'rb') as f:
+                self.blip_cap_data = pickle.load(f)
         self.verbose = verbose
         with open(subset2episode, "rb") as json_f:
             subset2episode = json.load(json_f)
-        self.setname = setname
-        self.setname_episode = subset2episode[self.setname] # list of all episodes in a particular set
-        del subset2episode
-        self.text_augmentations = text_augmentations
-        if self.verbose:
-            print(f"Loading {self.setname} subtitles.")
+
+        
+        self.how2sign = False
+        if aligned_subtitles_path == "/lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_subtitles.pkl":
+            self.how2sign = True
+        
         
         if not use_man_gloss:
+            if setname == "man_val":
+                subtitles_path = aligned_subtitles_path
+                setname = "val"
+            elif setname == "public_test":
+                subtitles_path = aligned_subtitles_path
+        
             with open(subtitles_path, "rb") as pickle_f:
                 self.subtitles = pickle.load(pickle_f)
             if self.verbose:
@@ -107,6 +119,13 @@ class Subtitles(Dataset):
         else:
             with open(os.path.join(man_gloss_path, f"{setname}.pkl"), "rb") as pickle_f:
                 self.subtitles = pickle.load(pickle_f)
+        
+        self.setname = setname
+        self.setname_episode = subset2episode[self.setname] # list of all episodes in a particular set
+        del subset2episode
+        self.text_augmentations = text_augmentations
+        if self.verbose:
+            print(f"Loading {self.setname} subtitles.")
         
         self.use_man_gloss = use_man_gloss
             
@@ -153,17 +172,20 @@ class Subtitles(Dataset):
                 "Filtering to subtitles with duration in" +
                 f" [{subtitles_min_duration}, {subtitles_max_duration}].",
             )
-        filtered_indices = np.where(
-            self.subtitles["duration"] <= subtitles_max_duration,
-        )[0]
-        filtered_indices = np.intersect1d(
-            filtered_indices,
-            np.where(
-                self.subtitles["duration"] >= subtitles_min_duration,
-            )[0],
-        )
-        self.filter_subtitles(filtered_indices)
+        if not self.how2sign:
+            filtered_indices = np.where(
+                self.subtitles["duration"] <= subtitles_max_duration,
+            )[0]
+            filtered_indices = np.intersect1d(
+                filtered_indices,
+                np.where(
+                    self.subtitles["duration"] >= subtitles_min_duration,
+                )[0],
+            )
+            self.filter_subtitles(filtered_indices)
 
+        self.train_cap = json.load(open(train_cap_path, "rb"))
+        self.train_cap_prob = train_cap_prob
         
 
         if filter_based_on_pls and setname == "train":
@@ -275,6 +297,8 @@ class Subtitles(Dataset):
             #     self.filter_subtitles(filtered_indices)
             
 
+        self.synonyms_dict = pickle.load(open(synonyms_pkl, "rb"))
+
 
         if setname == "train":
             with open(train_sent_ret_path, "rb") as f:
@@ -283,17 +307,19 @@ class Subtitles(Dataset):
             with open(val_sent_ret_path, "rb") as f:
                 self.sent_ret = pickle.load(f)
         
-        if "id" in self.subtitles.keys():
-        # filtering sent_ret
-            filtered_indices = np.where(
-                np.isin(self.subtitles["id"], list(self.sent_ret.keys())),
-            )[0]
+        # if "id" in self.subtitles.keys():
+        # # filtering sent_ret
+        #     filtered_indices = np.where(
+        #         np.isin(self.subtitles["id"], list(self.sent_ret.keys())),
+        #     )[0]
 
-            self.filter_subtitles(filtered_indices)
+        #     self.filter_subtitles(filtered_indices)
 
         self.aug_prev = aug_prev
         self.aug_prev_pct = aug_prev_pct
         self.aug_prev_shuffle = aug_prev_shuffle
+        self.aug_prev_neg = aug_prev_neg
+        self.aug_prev_neg_prob = aug_prev_neg_prob
 
         self.info_file_idx = {}
         with open(info_pkl, "rb") as pickle_f:
@@ -451,6 +477,11 @@ class Subtitles(Dataset):
             # 0.32 is 8 frames at 25 fps (16f windows)
             sub_end = min(
                 random_end, self.length[self.info_file_idx[video_name]] / self.fps - 0.32)
+        
+        # elif self.how2sign:
+        #     sub_start = self.subtitles["start"][idx] 
+        #     sub_end = self.subtitles["end"][idx] 
+
         else:
             sub_start = max(
                 0, self.subtitles["start"][idx] - self.subtitles_temporal_pad
@@ -477,7 +508,7 @@ class Subtitles(Dataset):
         prev_start = []
         prev_end = []
         if self.max_previous_sentences > 0:
-            previous_context = ""
+            # previous_context = ""
             # if self.setname == "train":
             #     num_sentences = random.randint(0, self.max_previous_sentences)
             # else:
@@ -487,18 +518,43 @@ class Subtitles(Dataset):
                     break
                 if self.subtitles["episode_name"][idx - i - 1] != self.subtitles["episode_name"][idx]:
                     continue
-                prev_text = self.subtitles["subtitle"][idx - i - 1] if not self.aug_prev else sample_sub_prev(self.subtitles["subtitle"][idx - i - 1], pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
+
+                if self.setname == "train" and random.random() < self.train_cap_prob and not self.how2sign:
+                    prev_text = self.train_cap[str(self.subtitles["id"][idx - i - 1])]["pred"]
+
+                    if previous_context is None:
+                        previous_context = prev_text
+                    else:
+                        previous_context = prev_text + ' ' + previous_context
+                    
+                    continue
+                
+                prev_text = self.subtitles["subtitle"][idx - i - 1]
+                if self.aug_prev_neg and  random.random() < random.random() * self.aug_prev_neg_prob and self.setname == "train":
+                    prev_text = random.sample(self.subtitles["subtitle"].tolist(), 1)[0]
+                
+                if self.aug_prev and self.setname == "train":
+                    prev_text = sample_sub_prev(prev_text, pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
+
                 prev_start.append(self.subtitles["start"][idx - i - 1])
                 prev_end.append(self.subtitles["end"][idx - i - 1])
+
+
                 if previous_context is None:
                     previous_context = prev_text
                 else:
                     previous_context = prev_text + ' ' + previous_context
         
+            if previous_context is None:
+                previous_context = ""
+        
         for i in range(len(prev_start)):
             if prev_end[i] - prev_start[i] <= 0.5:
-                prev_start[i] = max(0, prev_end - 1.0)
+                prev_start[i] = max(0, prev_end[i] - 1.0)
 
+        prev_start = []
+        prev_end = []
+        
         man_gloss = None
         if self.use_man_gloss:
             man_gloss = self.subtitles["man_gloss"][idx].strip().split()
@@ -512,14 +568,18 @@ class Subtitles(Dataset):
         start_second = math.floor(sub_starts)
         end_second = math.ceil(sub_ends)
 
-        try:
-            bg_description = self.blip_cap_data["captions"][self.blip_cap_data["video"].index(video_name.split(".")[0])][start_second:end_second+1]
-            bg_description = unique_ordered_list(bg_description)
-            bg_description = [x for x in bg_description if x != '']
-            if len(bg_description) == 0:
-                bg_description = ['No description available']
-            bg_description = '. '.join(bg_description) + '.'
-        except:
+        if self.blip_cap_data is not None:
+            try:
+                bg_description = self.blip_cap_data["captions"][self.blip_cap_data["video"].index(video_name.split(".")[0])][start_second:end_second+1]
+                bg_description = unique_ordered_list(bg_description)
+                bg_description = [x for x in bg_description if x != '']
+                if len(bg_description) == 0:
+                    bg_description = ['No description available']
+                bg_description = '. '.join(bg_description) + '.'
+            except:
+                bg_description = 'No description available.'
+        
+        else:
             bg_description = 'No description available.'
         
 
@@ -538,22 +598,22 @@ class Subtitles(Dataset):
             cslr2_probs = self.subtitles[prob_key][idx][0]
         
         ret_sent = ""
-        if "id" in self.subtitles.keys():
-            if self.setname == "train":
-                ret_sent = self.sent_ret[self.subtitles["id"][idx]]
-                # select an index at random from ret_sent in the top self.sent_ret_n
-                if len(ret_sent) > 0:
-                    ret_sent = random.choice(ret_sent[:self.sent_ret_n])
-                else:
-                    ret_sent = ""
+        # if "id" in self.subtitles.keys():
+        #     if self.setname == "train":
+        #         ret_sent = self.sent_ret[self.subtitles["id"][idx]]
+        #         # select an index at random from ret_sent in the top self.sent_ret_n
+        #         if len(ret_sent) > 0:
+        #             ret_sent = random.choice(ret_sent[:self.sent_ret_n])
+        #         else:
+        #             ret_sent = ""
             
-            else:
-                ret_sent = self.sent_ret[self.subtitles["id"][idx]]
-                # select the first index from ret_sent in the top self.sent_ret_n
-                if len(ret_sent) > 0:
-                    ret_sent = ret_sent[0]
-                else:
-                    ret_sent = ""
+        #     else:
+        #         ret_sent = self.sent_ret[self.subtitles["id"][idx]]
+        #         # select the first index from ret_sent in the top self.sent_ret_n
+        #         if len(ret_sent) > 0:
+        #             ret_sent = ret_sent[0]
+        #         else:
+        #             ret_sent = ""
 
         
         return {

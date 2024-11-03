@@ -67,6 +67,8 @@ class VggSLTNet(nn.Module):
         prev_pls = batch["prev_pls"]
         prev_pls_probs = batch["prev_pls_probs"]
 
+        spottings = batch["spottings"]
+
 
         # x = self.visual_encoder(x, masks)
         if self.load_features:        
@@ -102,7 +104,8 @@ class VggSLTNet(nn.Module):
                                                 lip_feats=lip_feats,
                                                 lip_masks=lip_masks,
                                                 prev_pls=prev_pls,
-                                                prev_pls_probs=prev_pls_probs
+                                                prev_pls_probs=prev_pls_probs,
+                                                spottings=spottings,
                                                 )
         return outputs, labels, gen_sentences, avg_conf
 

@@ -7,7 +7,7 @@ from peft import LoraConfig, get_peft_model
 import random
 
 from src.utils.score_utils import average_exp_values
-from src.utils.data_utils import get_unique_bg_words
+from src.utils.data_utils import get_unique_bg_words, drop_words
 
 
 class LanguageDecoder(nn.Module):
@@ -42,6 +42,11 @@ class LanguageDecoder(nn.Module):
                  use_prev_pls = False,
                  use_prev_pls_probs = False,
                  mix_in_prev_pls = 0.0,
+                 use_gt_prev = False,
+                 drop_bgw_pct = 0.0,
+                 drop_pl_pct = 0.0,
+                 use_spottings = False,
+                 mix_in_spottings = 0.0,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -56,7 +61,7 @@ class LanguageDecoder(nn.Module):
         
         self.torch_dtype = torch_dtype
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_llm, **tokenizer_config)
-        self.add_eos_token = True if os.path.basename(pretrained_llm) in ['Meta-Llama-3-8B', 'Meta-Llama-3-8B-Instruct'] else False
+        self.add_eos_token = True if os.path.basename(pretrained_llm) in ['Meta-Llama-3-8B', 'Meta-Llama-3-8B-Instruct', 'Meta-Llama-3.2-3B', 'Meta-Llama-3.2-1B'] else False
 
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -105,13 +110,21 @@ class LanguageDecoder(nn.Module):
         self.use_prev_pls_probs = use_prev_pls_probs
         self.mix_in_prev_pls = mix_in_prev_pls
 
+        self.use_gt_prev = use_gt_prev
+
+        self.drop_bgw_pct = drop_bgw_pct
+        self.drop_pl_pct = drop_pl_pct
+
+        self.use_spottings = use_spottings
+        self.mix_in_spottings = mix_in_spottings
+
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
         if self.add_eos_token:
             input_ids = torch.cat([input_ids, torch.LongTensor([self.tokenizer.eos_token_id]).to(device)], dim=0)
         return input_ids
     
-    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None, background_description=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
+    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None, background_description=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
 
         final_q = None
         inter_q = None
@@ -132,6 +145,10 @@ class LanguageDecoder(nn.Module):
                 else:
                     questions = [q + ' The previous possible words are: ' + ", ".join(pl) if len(pl) > 0 else "Not Available" + '.' for q, pl in zip(questions, prev_pls)]
 
+
+            if self.use_spottings and (random.random() <= self.mix_in_spottings or not self.training):
+                questions = [q + ' The following are some possible words present in the sentence: ' + ", ".join(s) if len(s) > 0 else "Not available" + '.' for q, s in zip(questions, spottings)]
+            
             # Use manual gloss if applicable
             pls = man_gloss if self.use_man_gloss and man_gloss is not None else pls
 
@@ -139,12 +156,12 @@ class LanguageDecoder(nn.Module):
             if self.use_pl_probs and (random.random() <= self.mix_in_pls_prob or not self.training):
                 questions = [q + ' The following are the possible words with their confidences: ' + ", ".join([f"{word}({prob:.2f})" for word, prob in zip(pl, p)]) + '.' for q, pl, p in zip(questions, pls, probs)]
             elif self.use_pl_w_feats and (random.random() <= self.mix_in_pls_prob or not self.training):
-                questions = [q + f' The following are some possible words present in the sentence: {", ".join(pl) if len(pl) > 0 else "Not available"}.' for q, pl in zip(questions, pls)]
+                questions = [q + f' The following are some possible words present in the sentence: {", ".join(drop_words(pl, self.drop_pl_pct)) if len(pl) > 0 else "Not available"}.' for q, pl in zip(questions, pls)]
                 
             # Add background description if applicable
             if self.bg_desc and (random.random() <= self.mix_in_bg_prob or not self.training):
                 if self.use_bg_words:
-                    bg_desc = [get_unique_bg_words(b, drop_sw=self.drop_bg_sw) for b in background_description]
+                    bg_desc = [drop_words(get_unique_bg_words(b, drop_sw=self.drop_bg_sw), self.drop_bgw_pct) for b in background_description]
                     questions = [q + f' Description of the background is: {", ".join(b) if len(b) > 0 else "Not available"}.' for q, b in zip(questions, bg_desc)]
                 else:
                     questions = [q + f' Description of the background is: {b}' for q, b in zip(questions, background_description)]
@@ -190,7 +207,7 @@ class LanguageDecoder(nn.Module):
             questions = [system_prompt for _ in questions]
 
             # Add previous contexts if applicable
-            if previous_contexts is not None and (random.random() <= self.mix_in_prev_prob or not self.training):
+            if previous_contexts is not None and (random.random() <= random.random() * self.mix_in_prev_prob or not self.training) and self.use_rec_prev:
                 questions = [q + f' The previous context is the following: {c}' if c else q for q, c in zip(questions, previous_contexts)]
 
             # Add word list with probabilities in the format pl_word(pl_prob)
@@ -201,7 +218,7 @@ class LanguageDecoder(nn.Module):
             
 
             # Add background description if applicable
-            if self.bg_desc and (self.sub_sub and self.use_bg_w_sub or random.random() <= self.mix_in_bg_prob or not self.training):
+            if self.bg_desc and (self.sub_sub and self.use_bg_w_sub or random.random() <= random.random() * self.mix_in_bg_prob or not self.training):
                 questions = [q + f' Description of the background is: {b}' for q, b in zip(questions, background_description)]
             
             if self.ret_sent and (random.random() <= self.mix_in_ret_prob or not self.training):
@@ -287,14 +304,14 @@ class LanguageDecoder(nn.Module):
         
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
-    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None, background_description = None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
+    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None, background_description = None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
 
         final_q = None
         pl_switch = False
         inter_q = None
 
         # Handling rec_prev if applicable
-        if self.use_rec_prev and not self.sub_sub:
+        if self.use_rec_prev and not self.sub_sub and not self.use_gt_prev:
             if len(rec_prev) > 0:
                 rec_prev = [". ".join(r) + "." if len(r) > 0 and c[0] >= self.min_prev_conf else '' for r, c in zip(rec_prev, rec_prev_conf)]
                 previous_contexts = rec_prev
@@ -316,6 +333,9 @@ class LanguageDecoder(nn.Module):
                 else:
                     questions = [q + ' The previous possible words are: ' + ", ".join(pl) if len(pl) > 0 else "Not Available" + '.' for q, pl in zip(questions, prev_pls)]
 
+            if self.use_spottings:
+                questions = [q + ' The following are some possible words present in the sentence: ' + ", ".join(s) if len(s) > 0 else "Not available" + '.' for q, s in zip(questions, spottings)]
+            
             # Use manual gloss if applicable
             pls = man_gloss if self.use_man_gloss and man_gloss is not None else pls
 
@@ -366,7 +386,7 @@ class LanguageDecoder(nn.Module):
             questions = [system_prompt for _ in questions]
 
             # Add previous contexts if applicable
-            if previous_contexts is not None:
+            if previous_contexts is not None and self.use_rec_prev:
                 questions = [q + f' The previous context is the following: {c}' if c else q for q, c in zip(questions, previous_contexts)]
 
             # Add word list with probabilities in the format pl_word(pl_prob)
@@ -447,13 +467,13 @@ class LanguageDecoder(nn.Module):
 
         return inputs_embeds, attn_masks, position_ids
 
-    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
+    def forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
         outputs_list = []
         gen_sentences_list = None
         labels_list = []
         avg_conf_list = []
 
-        outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)    
+        outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)    
         outputs_list.append(outputs)
         labels_list.append(labels)
 
@@ -463,7 +483,7 @@ class LanguageDecoder(nn.Module):
             
         if self.oracle and self.sub_sub and not self.training:
             self.sub_sub = False
-            outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
+            outputs, labels, gen_sentences, avg_conf = self._forward(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, ret=ret, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)
             self.sub_sub = True
             outputs_list.append(outputs)
             labels_list.append(labels)
@@ -475,19 +495,19 @@ class LanguageDecoder(nn.Module):
         return outputs_list, labels_list, gen_sentences_list, avg_conf_list
 
 
-    def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
-        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
+    def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
+        inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:
-            gen_sentences, avg_conf = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
+            gen_sentences, avg_conf = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)
         else:
             gen_sentences = None
             avg_conf = None
             
         return outputs, labels, gen_sentences, avg_conf
     
-    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None):
-        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs)
+    def _predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
+        inputs_embeds, attn_masks, position_ids = self._process_predict(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id, return_dict_in_generate=True, output_scores=True)
 
         scores = self.decoder.compute_transition_scores(outputs['sequences'], outputs['scores'], normalize_logits=True)

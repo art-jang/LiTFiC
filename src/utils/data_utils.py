@@ -4,6 +4,86 @@ import ipdb
 import string
 import torch
 from operator import itemgetter
+import string
+import contractions
+import re
+
+from bisect import bisect_left, bisect_right
+
+def fix_contractions(text):
+    fixed_text = contractions.fix(text)   
+    return fixed_text
+
+def remove_punctuation(text):
+    punctuation_pattern = r'[^\w\s]'  # Matches any character that is not a word character or whitespace
+    text_without_punctuation = re.sub(punctuation_pattern, '', text)
+
+    return text_without_punctuation
+
+def get_annotations_in_time_range(annotations_dict, episode_name, start_time, end_time):
+    """
+    Retrieves annot_words for a given episode within the specified time range.
+
+    Parameters:
+    - annotations_dict: The dictionary containing organized annotations.
+    - episode_name: The name of the episode to query.
+    - start_time: The start time of the range.
+    - end_time: The end time of the range.
+
+    Returns:
+    - A list of annot_words within the time range.
+    """
+    # Retrieve the annotations for the specified episode
+    episode_annotations = annotations_dict.get(episode_name, [])
+
+    # Extract the list of annot_times for binary search
+    times = [annot[0] for annot in episode_annotations]
+
+    # Find the start and end indices using binary search
+    start_index = bisect_left(times, start_time)
+    end_index = bisect_right(times, end_time)
+
+    # Slice the list to get annotations within the time range
+    relevant_annotations = episode_annotations[start_index:end_index]
+
+    # Extract and return the annot_words
+    annot_words = [annot[1] for annot in relevant_annotations]
+
+    return annot_words
+
+
+def drop_words(word_list, pct):
+    pct = random.random() * pct
+
+    num_to_drop = int(len(word_list) * pct / 100)
+    indices_to_drop = set(random.sample(range(len(word_list)), num_to_drop))
+    return [word for i, word in enumerate(word_list) if i not in indices_to_drop]
+
+def split_word_punctuation(word):
+    prefix = ''
+    suffix = ''
+    while word and word[0] in string.punctuation:
+        prefix += word[0]
+        word = word[1:]
+    while word and word[-1] in string.punctuation:
+        suffix = word[-1] + suffix
+        word = word[:-1]
+    return prefix, word, suffix
+
+def replace_random_word_with_synonym(sentence, syn_dict):
+    words = sentence.split()
+    indices_in_dict = []
+    for i, word in enumerate(words):
+        prefix, word_clean, suffix = split_word_punctuation(word)
+        if word_clean.lower() in syn_dict:
+            indices_in_dict.append(i)
+    if indices_in_dict:
+        idx = random.choice(indices_in_dict)
+        word = words[idx]
+        prefix, word_clean, suffix = split_word_punctuation(word)
+        synonym = random.choice(syn_dict[word_clean.lower()])
+        words[idx] = prefix + synonym + suffix
+    return ' '.join(words)
 
 
 def sample_pls(data, num_samples):
@@ -83,7 +163,9 @@ def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None, drop_sto
 def sample_sub_prev(sentence, pct=0.5, shuffle=False):
     words = sentence.split()
 
-    filtered_words = [word.strip(string.punctuation).lower() for word in words]     
+    filtered_words = [word.strip(string.punctuation).lower() for word in words]  
+
+    pct = 1 - (random.random() * pct)
     
     if shuffle:
         num_words_to_keep = math.ceil(len(filtered_words) * pct)
@@ -147,6 +229,11 @@ def cleanup_sub(sent):
         sent = sent[1:]
     if sent[-1] == "'":
         sent = sent[:-1]
+    
+    sent = sent.lower()
+    sent = fix_contractions(sent)
+    sent = remove_punctuation(sent)
+
     return sent
 
 
