@@ -3,20 +3,20 @@ batch_size: 8 # Needs to be divisible by the number of devices (e.g., if in a di
 num_workers: 0
 pin_memory: True
 collate_fn: src.data.components.sentence.collate_fn_padd_t
-dataset: bobsl
+dataset: how2sign
 eval_data_size: -1
 train_data_fraction: 1.0
 ret_data_size: 100
 val_episode_ind_path: ${paths.val_episode_ind_path} 
 test_episode_ind_path: ${paths.test_episode_ind_path}
-test_setname: public_test
+test_setname: test
 dataset_config:
   # general parameters to load sentences associated to subtitles
   subset2episode: ${paths.subset2episode}
   subtitles_path: ${paths.subtitles_path}
   subtitles_temporal_shift: 0.0
-  subtitles_max_duration: 20.0
-  subtitles_min_duration: 1.0
+  subtitles_max_duration: 10000000
+  subtitles_min_duration: 0
   temporal_pad: 1.0
   info_pkl: ${paths.info_pkl}
   max_previous_sentences: 0

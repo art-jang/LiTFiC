@@ -17,27 +17,36 @@ output_dir: ${hydra:runtime.output_dir}
 # path to working directory
 work_dir: ${hydra:runtime.cwd}
 
-subset2episode: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/splits/subset2episode.json
-vocab_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab/8697_vocab.pkl
-info_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/unannotated-info/info-src_videos_2236.pkl
-annotations_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-pl_vswin_t-bs256_float16/
-vid_features_lmdb: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
-word_embds_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab_embds/t5-large_8k_word_embeddings.pkl
-subtitles_path: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/subtitles_pkl/best_delta_postpro_bobsl_best_traineval_0_pslab_ftune_.pkl
-aligned_subtitles_path: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/subtitles_pkl/manually_aligned.pkl
-synonyms_pkl: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
-rgb_frames: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
-misaligned_csv_root: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
-heuristic_aligned_csv_root: /mnt/lynx4/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
-llm_root: /mnt/bear1/users/jyj/VGG/Phi-3-mini-4k-instruct
+subset2episode: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/splits/subset2episode.json #
+vocab_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab/8697_vocab.pkl
+info_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/unannotated-info/info-src_videos_2236.pkl
+annotations_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-pl_vswin_t-bs256_float16/
+vid_features_lmdb: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
+word_embds_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab_embds/t5-large_8k_word_embeddings.pkl
+subtitles_path: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/subtitles_pkl/best_delta_postpro_bobsl_best_traineval_0_pslab_ftune_.pkl
+aligned_subtitles_path: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/subtitles_pkl/manually-aligned.pkl
+synonyms_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
+rgb_frames: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-rgb_anon-public_1962/
+misaligned_csv_root: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_21.12.23/
+heuristic_aligned_csv_root: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
+llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B
 lm_root: ../cslr2/t5_checkpoint/
 question_pool: ./data/question_pool.txt
-cslr2_ckpt: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
-bleurt_path: 
-pl_dist_path: null
-blip_cap_path: blip2_captions_v2.pkl
-val_episode_ind_path: ../cslr2_t/bobsl/val_start_indices_cv2.json
-man_gloss_path: null
-train_sent_ret_path: ../cslr2_t/bobsl/train_sent_ret.pkl
-val_sent_ret_path: ../cslr2_t/bobsl/val_sent_ret.pkl
-lip_feats_path: null
+cslr2_ckpt: model_best.pth
+bleurt_path: lucadiliello/BLEURT-20
+pl_dist_path: null #./add_files/pl_dist.pkl
+blip_cap_path: ./add_files/blip2_captions_v2.pkl
+val_episode_ind_path: ./add_files/man_val_final_start_indices.json
+test_episode_ind_path: ./add_files/man_test_final_start_indices.json
+man_gloss_path: null #../cslr2_t/bobsl/manual_gloss/dense_annotations.06.09.24/
+train_sent_ret_path: ./add_files/train_sent_ret.pkl
+val_sent_ret_path: ./add_files/val_sent_ret.pkl
+lip_feats_path: ../cslr2_t/bobsl/lip_feats/lip_dict.pkl
+train_cap_path: null
+spottings_path: null
+
+bsl_subset2episode: /mnt/lynx2/datasets/bobsl+bsl/split/subset2episode.json
+bsl_subtitles_path: /mnt/lynx2/datasets/bobsl+bsl/subtitles/subtitles.pkl
+bsl_info_pkl: /mnt/lynx2/datasets/bobsl+bsl/info/info.pkl
+bsl_vid_features_lmdb: /mnt/lynx2/datasets/bobsl+bsl/lmdbs/swin-bsl-1k/features
+bsl_annotations_pkl: /mnt/lynx2/datasets/bobsl+bsl/lmdbs/swin-bsl-1k/pseudo_labels

@@ -39,6 +39,7 @@ class VggSLTNet(nn.Module):
     def forward(self, batch: dict, predict = False, ret = False) -> torch.Tensor:
         if self.load_features:
             x = batch["features"]
+
         masks = batch["attn_masks"]
         subtitles = batch["subtitles"]
         questions = batch["questions"] if batch["questions"][0] is not None else None

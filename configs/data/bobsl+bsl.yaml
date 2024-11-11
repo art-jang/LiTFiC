@@ -95,3 +95,88 @@ dataset_config:
   filter_based_on_pls: False
 
   spottings_path: ${paths.spottings_path}
+
+extra_dataset_config:
+  # general parameters to load sentences associated to subtitles
+  subset2episode: ${paths.bsl_subset2episode}
+  subtitles_path: ${paths.bsl_subtitles_path}
+  subtitles_temporal_shift: 0.0
+  subtitles_max_duration: 20.0
+  subtitles_min_duration: 1.0
+  temporal_pad: 1.0
+  info_pkl: ${paths.bsl_info_pkl}
+  max_previous_sentences: 0
+  question_pool: ${paths.question_pool}
+  # question_pool: null
+  filter_stop_words: False
+  subtitles_random_offset: 0.5
+  fps: 12.5
+
+  train_cap_prob: 0.0
+  train_cap_path: null
+
+  # parameters to load video features
+  load_features: True
+  feats_lmdb: ${paths.bsl_vid_features_lmdb}
+  feats_load_stride: 1
+  feats_load_float16: True
+  feats_lmdb_window_size: 8
+  feats_lmdb_stride: 1
+  feats_dim: ${model.net.mm_projector_config.mm_hidden_size}
+  video_augmentations: null
+
+  # parameters to load video pseudo-labels
+  load_pl: True
+  pl_lmdb: ${paths.bsl_annotations_pkl}
+  pl_load_stride: 1
+  pl_load_float16: False
+  pl_lmdb_window_size: 8
+  pl_lmdb_stride: 1
+  pl_filter: 0.6
+  pl_min_count: 1
+  pl_synonym_grouping: True
+  synonyms_pkl: ${paths.synonyms_pkl}
+  vocab_pkl: ${paths.vocab_pkl}
+
+  # parameters to load word embeddings
+  load_word_embds: False
+  word_embds_pkl: ${paths.word_embds_pkl}
+
+  # other parameters
+  verbose: True
+  sub_sample_shuffle: False 
+  sub_sample_pct: 0.5
+  sub_sample_replace: False
+  drop_stopwords: False
+  sw_level: 0
+  pl_dist_path: ${paths.pl_dist_path}
+  blip_cap_path: null
+  filter_blip: False
+
+  aug_prev: False
+  aug_prev_pct: 0.5
+  aug_prev_shuffle: False
+
+  aug_prev_neg: False
+  aug_prev_neg_prob: 0.0
+
+  sub_syn_aug_prob: 0.0
+
+  man_gloss_path: null
+  use_man_gloss: False
+
+  # cslr2_pl params
+  use_cslr2_pl: False
+  cslr2_pl_type: nn
+
+  # sent ret params
+  sent_ret_n: 20
+  train_sent_ret_path: null
+  val_sent_ret_path: null
+
+  # lip feat params
+  lip_feats_path: ${paths.lip_feats_path}
+
+  filter_based_on_pls: False
+
+  spottings_path: null

@@ -1,9 +1,9 @@
-python src/train.py trainer.devices=[1] task_name=bobsl_baseline experiment=llama3 \
+python src/train.py trainer.devices=[1] task_name=combine_baseline experiment=llama3 data=bobsl+bsl \
 model.net.llm_config.bg_desc=False \
 model.net.llm_config.use_rec_prev=False \
 model.net.llm_config.ret_sent=False \
 model.net.llm_config.use_prev_pls=False \
-model.net.llm_config.use_pl_w_feats=False \
+model.net.llm_config.use_pl_w_feats=True \
 data.dataset_config.max_previous_sentences=0 \
 data.dataset_config.filter_based_on_pls=False \
 model.net.llm_config.lora=True \
@@ -11,9 +11,9 @@ model.net.llm_config.use_bg_words=False \
 model.net.llm_config.drop_bg_sw=False \
 model.context_len=1 \
 model.net.llm_config.mix_in_ret_prob=1.0 \
-model.net.llm_config.mix_in_pls_prob=1.0 \
+model.net.llm_config.mix_in_pls_prob=0.5 \
 model.net.llm_config.mix_in_prev_prob=1.0 \
 model.net.llm_config.mix_in_bg_prob=1.0 \
 model.net.llm_config.mix_in_prev_pls=1.0 \
-data.num_workers=4 \
-model.scheduler.warmup_epochs=5 \
+data.num_workers=0 \
+model.scheduler.warmup_epochs=5

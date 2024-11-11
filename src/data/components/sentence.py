@@ -417,11 +417,19 @@ class Sentences(Dataset):
                 # using range, we can directly have idx as key
                 prob = prob[0].item()
                 label = label[0].item()
+                
                 # convert annotation_idx to feature_idx
+                # hard coded for now: bsl's stride is 2 and bobsl's stride is 1
+                # correct_annotation_idx = int(
+                #     annotation_idx * self.pseudo_label.lmdb_stride / \
+                #         (2 * self.pseudo_label.load_stride)
+                # )
+                
                 correct_annotation_idx = int(
-                    annotation_idx * self.pseudo_label.lmdb_stride / \
-                        (2 * self.pseudo_label.load_stride)
+                    annotation_idx * 2 / \
+                        (2 * 1)
                 )
+
                 if prob >= self.pl_filter and annotation_idx in min_count_indices:
                     # only keep annotations with
                     # 1) prob >= pl_filter
@@ -483,6 +491,11 @@ class Sentences(Dataset):
 
             target_indices = torch.tensor(list(target_dict.keys()), dtype=torch.long)
             target_labels = torch.tensor(list(target_dict.values())).squeeze(-1)
+            
+            # inverted_word = [self.inverted_vocab[x.item()] for x in target_labels]
+            # print(f"Target labels: {inverted_word}")
+            # print(f"Subtitles: {subtitle}")
+            
             assert len(target_indices) == len(target_labels)
             if self.word_embds is not None:
                 # replace the word_embds_dict by two lists: (i) indices, (ii) word embds

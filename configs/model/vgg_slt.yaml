@@ -48,7 +48,7 @@ net:
       batch_first: True
       depth: 2
     cslr2_options:
-      use: True
+      use: False
       ckpt_path: ${paths.cslr2_ckpt}
       freeze: True
     dropout: 0.0
@@ -145,4 +145,3 @@ output_dir: ${paths.output_dir}
 bleurt_path: ${paths.bleurt_path}
 context_len: 1
 synonyms_pkl: ${paths.synonyms_pkl}
-

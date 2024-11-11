@@ -15,10 +15,7 @@ from operator import itemgetter
 
 import os
 import random
-from src.data.components.lmdb_loader import LMDBLoader
-# import contractions
 import re
-# import spacy
 import torch
 from tqdm import tqdm
 
@@ -98,20 +95,16 @@ class Subtitles(Dataset):
         self.verbose = verbose
         with open(subset2episode, "rb") as json_f:
             subset2episode = json.load(json_f)
-
-        
-        self.how2sign = False
-        if aligned_subtitles_path == "/lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_subtitles.pkl":
-            self.how2sign = True
-        
         
         if not use_man_gloss:
-            if setname == "man_val":
-                subtitles_path = aligned_subtitles_path
-                setname = "val"
-            elif setname == "public_test":
-                subtitles_path = aligned_subtitles_path
-        
+            if setname != 'train':
+                subtitles_max_duration = 1000000
+                subtitles_min_duration = 0
+                subtitles_random_offset = 0.0
+                
+                if aligned_subtitles_path is not None:
+                    subtitles_path = aligned_subtitles_path
+
             with open(subtitles_path, "rb") as pickle_f:
                 self.subtitles = pickle.load(pickle_f)
             if self.verbose:
@@ -129,7 +122,6 @@ class Subtitles(Dataset):
         
         self.use_man_gloss = use_man_gloss
             
-
         self.subtitles_temporal_shift = subtitles_temporal_shift
         self.subtitles_random_offset = subtitles_random_offset
         self.subtitles_temporal_pad = temporal_pad
@@ -172,140 +164,53 @@ class Subtitles(Dataset):
                 "Filtering to subtitles with duration in" +
                 f" [{subtitles_min_duration}, {subtitles_max_duration}].",
             )
-        if not self.how2sign:
-            filtered_indices = np.where(
-                self.subtitles["duration"] <= subtitles_max_duration,
-            )[0]
-            filtered_indices = np.intersect1d(
-                filtered_indices,
-                np.where(
-                    self.subtitles["duration"] >= subtitles_min_duration,
-                )[0],
-            )
-            self.filter_subtitles(filtered_indices)
+        filtered_indices = np.where(
+            self.subtitles["duration"] <= subtitles_max_duration,
+        )[0]
+        filtered_indices = np.intersect1d(
+            filtered_indices,
+            np.where(
+                self.subtitles["duration"] >= subtitles_min_duration,
+            )[0],
+        )
+        self.filter_subtitles(filtered_indices)
 
-        self.train_cap = json.load(open(train_cap_path, "rb"))
-        self.train_cap_prob = train_cap_prob
-        
+        if setname != 'train':
+            if self.verbose:
+                print(
+                    f"Filtering to {self.setname} subtitles with Error cases.",
+                )            
+            filtered_indices = []
+            for i in range(len(self.subtitles["subtitle"])):
+                pattern = r"\[([A-Z\-]+)\]"
+                match = re.search(pattern, self.subtitles["subtitle"][i])
+                if match is None:
+                    filtered_indices.append(i)
+                
+            if len(filtered_indices) > 0:
+                filtered_indices = np.array(filtered_indices)
+                self.filter_subtitles(filtered_indices)
+
+        if train_cap_path is not None:
+            self.train_cap = json.load(open(train_cap_path, "rb"))
+            self.train_cap_prob = train_cap_prob
+        else:
+            self.train_cap = None
+            self.train_cap_prob = None
 
         if filter_based_on_pls and setname == "train":
             filtered_indices = np.load(f"filtered_indices_pls_{setname}.npy")
             self.filter_subtitles(filtered_indices)
             print(f"Filtered based on pseudo-labels. {len(filtered_indices)} subtitles left.")
-            # filtered_indices = []
-            # nlp = spacy.load("en_core_web_sm")
-
-            # self.pseudo_label = LMDBLoader(
-            #     **pl_configs,
-            #     load_type="pseudo-labels",
-            #     verbose=verbose
-            # )
-            
-            # msg = "vocab_pkl must be provided if load_pl is True"
-            # assert vocab_pkl is not None, msg
-            # self.vocab = pickle.load(open(vocab_pkl, "rb"))
-            # if "words_to_id" in self.vocab.keys():
-            #     self.vocab = self.vocab["words_to_id"]
-            # self.vocab_size = len(self.vocab)
-            # self.vocab["bos"] = self.vocab_size
-            # self.vocab["eos"] = self.vocab_size + 1
-            # self.vocab["<pad>"] = self.vocab_size + 2  # <pad> as 'pad' in vocab
-            # self.vocab["no annotation"] = -1  # dummy class for no annotation
-            # self.inverted_vocab = {v: k for k, v in self.vocab.items()}
-
-            # self.synonym_grouping = pl_synonym_grouping
-            # if self.synonym_grouping:
-            #     msg = "synonyms_pkl must be provided if synonym_grouping is True"
-            #     assert synonyms_pkl is not None, msg
-            #     self.synonyms_dict = pickle.load(open(synonyms_pkl, "rb"))
-            #     self.fix_synonyms_dict()
-            # self.pl_filter = pl_filter
-            # self.pl_min_count = pl_min_count
-
-            # for i in tqdm(range(len(self.subtitles["episode_name"])), desc="Filtering pseudo-labels", total=len(self.subtitles["episode_name"])):
-            #     video_name = self.subtitles["episode_name"][i] + ".mp4"
-            #     sub_start = self.subtitles["start"][i] - self.subtitles_temporal_pad
-            #     sub_end = self.subtitles["end"][i] + self.subtitles_temporal_pad
-            #     labels, probs = self.pseudo_label.load_sequence(episode_name=video_name,begin_frame=int(sub_start * self.fps),end_frame=int(sub_end * self.fps),)
-                
-            #     if self.synonym_grouping:
-            #         words = itemgetter(
-            #             *rearrange(labels.numpy(), "t k -> (t k)")
-            #         )(self.inverted_vocab)
-            #         words = rearrange(
-            #             np.array(words), "(t k) -> t k", k=5,
-            #         )
-            #         new_words, new_probs = [], []
-            #         for word, prob in zip(words, probs):
-            #             new_prob, new_word = self.synonym_combine(word, prob)
-            #             new_words.append(new_word)
-            #             new_probs.append(new_prob)
-            #         new_words = rearrange(np.array(new_words), "t k -> (t k)")
-            #         labels = itemgetter(*new_words)(self.vocab)
-            #         labels = rearrange(torch.tensor(labels), "(t k) -> t k", k=5)
-            #         probs = torch.stack(new_probs)
-            #     # filter
-            #     # get indices of annots occuring at least pl_min_count times
-            #     if self.pl_min_count > 1:
-            #         # torch-based method
-            #         _, counts = torch.unique_consecutive(labels[:, 0], return_counts=True)
-            #         repeated_counts = torch.repeat_interleave(counts, counts)
-            #         min_count_indices = torch.where(repeated_counts >= self.pl_min_count)[0]
-            #     else:
-            #         min_count_indices = torch.arange(start=0, end=len(labels))
-
-            #     # get dictionnary of annotation
-            #     annotation_dict, target_dict = {}, {}
-            #     for annotation_idx, (prob, label) in enumerate(zip(probs, labels)):
-            #         prob = prob[0].item()
-            #         label = label[0].item()
-            #         correct_annotation_idx = int(
-            #             annotation_idx * self.pseudo_label.lmdb_stride / \
-            #                 (2 * self.pseudo_label.load_stride)
-            #         )
-            #         if prob >= self.pl_filter and annotation_idx in min_count_indices:
-            #             try:
-            #                 target_dict[correct_annotation_idx].append(label)
-            #             except KeyError:
-            #                 target_dict[correct_annotation_idx] = [label]
-            #             annotation_list = [
-            #                 int(int(sub_start * self.fps) + correct_annotation_idx),
-            #                 "pseudo-label", prob,
-            #             ]
-            #             try:
-            #                 annotation_dict[label].append(annotation_list)
-            #             except KeyError:
-            #                 annotation_dict[label] = [annotation_list]
-            #     # video augmentation
-            #     pls = [self.inverted_vocab[x[0]] for x in list(target_dict.values())]
-            #     unique_pls = list(set(pls))
-            #     sub = self.subtitles["subtitle"][i]
-            #     sub = contractions.fix(sub)
-            #     sub = remove_punctuation(sub)
-            #     sub = sub.lower()
-                
-            #     # at least one pl in the subtitles
-            #     words = nlp(sub)
-            #     for word in words:
-            #         if word.lemma_ in unique_pls:
-            #             filtered_indices.append(i)
-            #             break
-
-            # if len(filtered_indices) > 0:
-            #     filtered_indices = np.array(filtered_indices)
-            #     np.save(f"filtered_indices_pls_{setname}.npy", filtered_indices)
-            #     self.filter_subtitles(filtered_indices)
-            
 
         self.synonyms_dict = pickle.load(open(synonyms_pkl, "rb"))
 
-
-        if setname == "train":
-            with open(train_sent_ret_path, "rb") as f:
+        sent_ret_path = train_sent_ret_path if setname == "train" else val_sent_ret_path
+        if sent_ret_path is not None:
+            with open(sent_ret_path, "rb") as f:
                 self.sent_ret = pickle.load(f)
         else:
-            with open(val_sent_ret_path, "rb") as f:
-                self.sent_ret = pickle.load(f)
+            self.sent_ret = None
         
         # if "id" in self.subtitles.keys():
         # # filtering sent_ret
@@ -477,11 +382,6 @@ class Subtitles(Dataset):
             # 0.32 is 8 frames at 25 fps (16f windows)
             sub_end = min(
                 random_end, self.length[self.info_file_idx[video_name]] / self.fps - 0.32)
-        
-        # elif self.how2sign:
-        #     sub_start = self.subtitles["start"][idx] 
-        #     sub_end = self.subtitles["end"][idx] 
-
         else:
             sub_start = max(
                 0, self.subtitles["start"][idx] - self.subtitles_temporal_pad
@@ -508,10 +408,6 @@ class Subtitles(Dataset):
         prev_start = []
         prev_end = []
         if self.max_previous_sentences > 0:
-            # previous_context = ""
-            # if self.setname == "train":
-            #     num_sentences = random.randint(0, self.max_previous_sentences)
-            # else:
             num_sentences = self.max_previous_sentences
             for i in range(num_sentences):
                 if idx - i - 1 < 0:
@@ -519,15 +415,16 @@ class Subtitles(Dataset):
                 if self.subtitles["episode_name"][idx - i - 1] != self.subtitles["episode_name"][idx]:
                     continue
 
-                if self.setname == "train" and random.random() < self.train_cap_prob and not self.how2sign:
-                    prev_text = self.train_cap[str(self.subtitles["id"][idx - i - 1])]["pred"]
+                if self.train_cap is not None:
+                    if self.setname == "train" and random.random() < self.train_cap_prob:
+                        prev_text = self.train_cap[str(self.subtitles["id"][idx - i - 1])]["pred"]
 
-                    if previous_context is None:
-                        previous_context = prev_text
-                    else:
-                        previous_context = prev_text + ' ' + previous_context
-                    
-                    continue
+                        if previous_context is None:
+                            previous_context = prev_text
+                        else:
+                            previous_context = prev_text + ' ' + previous_context
+                        
+                        continue
                 
                 prev_text = self.subtitles["subtitle"][idx - i - 1]
                 if self.aug_prev_neg and  random.random() < random.random() * self.aug_prev_neg_prob and self.setname == "train":
@@ -538,7 +435,6 @@ class Subtitles(Dataset):
 
                 prev_start.append(self.subtitles["start"][idx - i - 1])
                 prev_end.append(self.subtitles["end"][idx - i - 1])
-
 
                 if previous_context is None:
                     previous_context = prev_text
