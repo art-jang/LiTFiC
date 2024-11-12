@@ -1,5 +1,5 @@
 _target_: src.data.slt_datamodule.SLTDataModule
-batch_size: 8 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+batch_size: 2 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
 num_workers: 0
 pin_memory: True
 collate_fn: src.data.components.sentence.collate_fn_padd_t
