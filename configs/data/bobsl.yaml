@@ -95,3 +95,5 @@ dataset_config:
   filter_based_on_pls: False
 
   spottings_path: ${paths.spottings_path}
+
+  sub_aug_drop: False

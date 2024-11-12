@@ -39,7 +39,11 @@ class SLTDataModule(LightningDataModule):
         self.val_episode_ind_path = val_episode_ind_path
         with open(val_episode_ind_path, 'r') as f:
             self.val_episode_ind = json.load(f)
-
+        
+        self.h2s = False
+        if self.val_episode_ind_path.split("/")[-1] == "test_how2sign_indices.json":
+            self.h2s = True
+        
     def setup(self, stage: Optional[str] = None) -> None:
         if self.trainer is not None:
             self.batch_size_per_device = self.hparams.batch_size
@@ -108,7 +112,7 @@ class SLTDataModule(LightningDataModule):
         rank = self.trainer.global_rank
         world_size = self.trainer.world_size
 
-        if self.val_episode_ind_path.split("/")[-1] != "val_how2sign_indices.json":
+        if not self.h2s:
             episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/val_start_indices_manual.json", "rb"))
         else:
             episode_ind = self.val_episode_ind
@@ -160,14 +164,19 @@ class SLTDataModule(LightningDataModule):
         world_size = self.trainer.world_size
 
         episode_ind = self.val_episode_ind
+        
+
         if self.test_setname == "man_val":
             episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/val_start_indices_manual.json", "rb"))
         
         elif self.test_setname == "public_test":
-            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/test_start_indices.json", "rb"))
+            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/man_test_final_start_indices.json", "rb"))
         
         elif self.test_setname == "train":
-            episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/train_start_indices.json", "rb"))
+            if self.h2s:
+                episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/index/index/train_how2sign_indices.json", "rb"))
+            else:
+                episode_ind = json.load(open("/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/train_start_indices.json", "rb"))
 
         total_episodes = len(episode_ind["idx"])
         episodes_per_gpu = total_episodes // world_size

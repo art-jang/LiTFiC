@@ -29,24 +29,29 @@ export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 # paths.subtitles_path='/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/hy_data/acmmm_pseudo_subtitles_v3.pkl'\
 
-srun python src/eval.py task_name=llama_feats_sw_pls_bgw_man_test experiment=llama3_haran paths=haran \
-    ckpt_path="logs/llama_feats_sw_pls_bgw_2/runs/2024-10-29_00-20-45/checkpoints/epoch_epoch\=004.ckpt"\
+srun python src/eval.py task_name=llama_3B_all_gt_test experiment=llama3_haran paths=haran \
+    ckpt_path="logs/llama_3B_all/runs/2024-11-10_22-42-59/checkpoints/epoch_epoch\=003.ckpt"\
+    paths.llm_root="../hf/Llama-3.2-3B"\
+    model.net.mm_projector_config.hidden_size=3072\
     data.test_setname="public_test"\
     model.net.llm_config.bg_desc=True\
     model.net.llm_config.use_pl_w_feats=True\
-    model.net.llm_config.use_rec_prev=False\
+    model.net.llm_config.use_rec_prev=True\
     model.net.llm_config.use_prev_pls=False\
     model.net.llm_config.ret_sent=False\
-    model.net.llm_config.use_gt_prev=False\
-    data.dataset_config.max_previous_sentences=0\
+    model.net.llm_config.use_gt_prev=True\
+    model.net.llm_config.use_spottings=False\
+    data.dataset_config.max_previous_sentences=1\
     data.dataset_config.filter_based_on_pls=False\
     data.dataset_config.aug_prev_neg=False\
     data.dataset_config.aug_prev_neg_prob=0.5\
     data.dataset_config.aug_prev=False\
     data.dataset_config.aug_prev_pct=0.5\
+    data.dataset_config.train_cap_prob=0.5\
     data.dataset_config.sub_syn_aug_prob=0.0\
     model.net.mm_projector_config.cslr2_options.use=False\
     model.net.llm_config.lora=True\
+    model.net.llm_config.freeze_decoder=False\
     model.net.llm_config.use_bg_words=True\
     model.net.llm_config.drop_bg_sw=True\
     model.context_len=1\
@@ -55,5 +60,6 @@ srun python src/eval.py task_name=llama_feats_sw_pls_bgw_man_test experiment=lla
     model.net.llm_config.mix_in_prev_prob=1.0\
     model.net.llm_config.mix_in_bg_prob=1.0\
     model.net.llm_config.mix_in_prev_pls=1.0\
+    model.net.llm_config.mix_in_spottings=1.0\
     model.net.llm_config.drop_bgw_pct=0.0\
     model.net.llm_config.drop_pl_pct=0.0\

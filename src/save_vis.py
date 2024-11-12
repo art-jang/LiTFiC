@@ -5,6 +5,9 @@ import rootutils
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.utils.vis_utils import save_video
 from tqdm import tqdm
+import hydra
+from omegaconf import DictConfig
+
 
 def find_json_files(parent_folder):
     json_files = []
@@ -46,8 +49,63 @@ def process_json_files(parent_folder):
 
 # Example usage
 
-parent_folder = 'bg_ay'
-rgb_lmdb_env = lmdb.open(
-                "../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/", readonly=True, lock=False, max_readers=512
+@hydra.main(version_base="1.3", config_path="../configs", config_name="train.yaml")
+def main(cfg: DictConfig) -> None:
+
+    json_path= "/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/comparitive_analysis.json"
+    parent_folder = "/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/comparitive_analysis"
+    if not os.path.exists(parent_folder):
+        os.makedirs(parent_folder)
+    vid_folder = f"{parent_folder}/videos"
+    if not os.path.exists(vid_folder):
+        os.makedirs(vid_folder)
+    
+    save_path = f"{parent_folder}/comparitive_analysis_final.json"
+
+    rgb_lmdb_env = lmdb.open(
+                    "../cslr2_t/bobsl/lmdbs/lmdb-rgb_anon-public_1962/", readonly=True, lock=False, max_readers=512
+                )
+    # process_json_files(parent_folder)
+
+    # sub_path = "../cslr2_t/bobsl/cslr2_pls_v3.pkl"
+    # bg_path = ""
+
+
+    data = json.load(open(json_path, 'r'))
+
+    dataset = hydra.utils.instantiate(
+                cfg.data,
             )
-process_json_files(parent_folder)
+
+    dataset.setup()
+
+    for idx, d in tqdm(enumerate(data), total=len(data)):
+        vid = d["episode_name"]
+        start = d["start"]
+        end = d["end"]
+        path = f"{parent_folder}/{idx}.mp4"
+        # save_video(vid, start, end, path, rgb_lmdb_env)
+
+        pls, probs = dataset.data_train.dataset.get_pls(vid, start, end)
+
+        d["pls"] = pls
+        d["probs"] = probs
+    
+    with open(save_path, 'w') as file:
+        json.dump(data, file, indent=4)
+
+
+    # teaser
+    # save_vid = "6000587715345640783"
+    # start = 490.84
+    # end = 500.28
+    # # path = f"{parent_folder}/teaser.mp4"
+    # # save_video(save_vid, start, end, path, rgb_lmdb_env)
+    # pls, _ = dataset.data_train.dataset.get_pls(save_vid, start, end)
+    # print(pls)
+    # print(len(pls))
+
+
+if __name__ == "__main__":
+    main()
+

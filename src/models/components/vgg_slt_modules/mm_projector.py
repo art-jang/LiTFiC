@@ -9,6 +9,14 @@ from src.utils.cslr_tools import load_checkpoint_model
 from omegaconf import OmegaConf
 from src.models.components.vgg_slt_modules.qformer import QFormer
 
+class Permute(nn.Module):
+    def __init__(self, *dims):
+        super(Permute, self).__init__()
+        self.dims = dims
+
+    def forward(self, x):
+        return x.permute(self.dims)
+    
 class MMProjector(nn.Module):
     def __init__(self,
                  cslr2_config,
@@ -22,26 +30,28 @@ class MMProjector(nn.Module):
                  dropout=0.0,
                  **kwargs):
         super(MMProjector, self).__init__()
-        self.projector_type = projector_type
-
         self.dropout = nn.Dropout(dropout) if dropout > 0.0 else nn.Identity()
-
+        self.projector_type = projector_type
         self.use_cslr2 = cslr2_options.use
 
+        self.mapping = None
         if self.use_cslr2:
+            if mm_hidden_size != 768:
+                self.mapping = nn.Linear(mm_hidden_size, 768)
+                mm_hidden_size = 768
             self.cslr2 = cslr2_config
 
-        if cslr2_options.ckpt_path is not None and self.use_cslr2:
-            self.cslr2 = load_checkpoint_model(cslr2_options.ckpt_path, self.cslr2, 'cpu')
-        
-        if cslr2_options.freeze and self.use_cslr2:
-            for name, param in self.cslr2.named_parameters():
-                param.requires_grad = False
+            if cslr2_options.ckpt_path is not None:
+                self.cslr2 = load_checkpoint_model(cslr2_options.ckpt_path, self.cslr2, 'cpu')
+                
+            if cslr2_options.freeze:
+                for name, param in self.cslr2.named_parameters():
+                    param.requires_grad = False
         
         self.use_qformer = use_qformer
         if use_qformer:
             self.qformer = QFormer(**qformer_config)
-
+        self.projector_type = projector_type
         # mapping network
         mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
         if mlp_gelu_match:
@@ -54,14 +64,29 @@ class MMProjector(nn.Module):
         else:
             if projector_type == 'linear':
                 self.projector = nn.Linear(mm_hidden_size, hidden_size)
-            elif projector_type == 'conv':
-                self.projector = nn.Sequential(
-                    nn.Conv1d(mm_hidden_size, mm_hidden_size, kernel_size=5, padding=2),
-                    nn.ReLU(),
-                    nn.MaxPool1d(kernel_size=2, stride=2),
-                    nn.Conv1d(mm_hidden_size, mm_hidden_size, kernel_size=5, padding=2),
-                    nn.ReLU(),
-                    nn.MaxPool1d(kernel_size=2, stride=2),)
+            elif 'conv' in projector_type:
+                conv_match = re.match(r'^conv_K(\d+)_P(\d+)_KP(\d+)_L(\d+)$', projector_type)
+                assert conv_match, f'Invalid projector type: {projector_type}'
+                
+                self.kernel_size = int(conv_match.group(1))
+                self.stride = int(conv_match.group(2))
+                self.kernel_size_pool = int(conv_match.group(3))
+                self.num_layers = int(conv_match.group(4))
+                
+                projector = []
+                for i in range(self.num_layers):
+                    projector.append(nn.Conv1d(mm_hidden_size, mm_hidden_size, kernel_size=self.kernel_size, padding=self.kernel_size//2))
+                    if False:
+                        if True:
+                            projector.append(nn.BatchNorm1d(mm_hidden_size))
+                        else:
+                            projector.append(Permute(0, 2, 1))
+                            projector.append(nn.LayerNorm(mm_hidden_size))
+                            projector.append(Permute(0, 2, 1))
+                    projector.append(nn.ReLU())
+                    # if i != self.num_layers - 1:
+                    projector.append(nn.MaxPool1d(kernel_size=self.kernel_size_pool, stride=self.stride))
+                self.projector = nn.Sequential(*projector)
                 self.projector2 = nn.Linear(mm_hidden_size, hidden_size)
             else:
                 raise ValueError(f'Unknown projector type: {projector_type}')
@@ -132,6 +157,8 @@ class MMProjector(nn.Module):
 
     def forward(self, x, masks=None, target_indices = None, target_labels = None):
         if self.use_cslr2:
+            if self.mapping is not None:
+                x = self.mapping(x)
             x, masks = self.cslr2(x, masks, target_indices, target_labels)
         
         if self.use_qformer:
@@ -146,17 +173,17 @@ class MMProjector(nn.Module):
         # else:
         #     x = self.projector(x)
         #     x, masks = self._pool(x, masks)
-
-        if self.projector_type == 'conv':
+        if 'conv' in self.projector_type:
             x = x.permute(0, 2, 1)
         x = self.projector(x)
-        if self.projector_type == 'conv':
+        if 'conv' in self.projector_type:
             x = x.permute(0, 2, 1)
-            masks = torch.nn.functional.max_pool1d(masks, kernel_size=2, stride=2)
-            masks = torch.nn.functional.max_pool1d(masks, kernel_size=2, stride=2)
+            for i in range(self.num_layers):
+                # if i != self.num_layers -1:
+                masks = torch.nn.functional.max_pool1d(masks, kernel_size=self.kernel_size_pool, stride=self.stride)
+            x = x * masks.unsqueeze(-1)
             x = self.projector2(x)
             
         x = self.dropout(x)
-
-
+        
         return x, masks

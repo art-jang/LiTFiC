@@ -230,9 +230,9 @@ def cleanup_sub(sent):
     if sent[-1] == "'":
         sent = sent[:-1]
     
-    sent = sent.lower()
-    sent = fix_contractions(sent)
-    sent = remove_punctuation(sent)
+    # sent = sent.lower()
+    # sent = fix_contractions(sent)
+    # sent = remove_punctuation(sent)
 
     return sent
 
@@ -263,3 +263,9 @@ def get_unique_bg_words(bg_words, drop_sw = False):
         words = [word for word in words if word not in stop_words]
     
     return words
+
+def remove_words(text, max_p=0.5):
+    text = text.split()
+    max_remove = random.randint(0, int(max_p * len(text)))
+    keep_idx = sorted(random.sample(range(len(text)), len(text) - max_remove))
+    return ' '.join([text[i] for i in keep_idx])

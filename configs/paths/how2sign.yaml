@@ -24,8 +24,8 @@ annotations_pkl: /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/lmdb
 # vid_features_lmdb: /mnt/lynx4/datasets/how2sign/lmdbs/lmdb--feats_i3d_how2sign-how2sign
 vid_features_lmdb: /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/lmdbs/new_swin_prebobsl_large/features
 word_embds_pkl: ../cslr2_t/bobsl/vocab_embds/t5-large_8k_word_embeddings.pkl # not used
-subtitles_path:  /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_subtitles.pkl # 
-aligned_subtitles_path:  /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_subtitles.pkl # not used
+subtitles_path:  /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_id_sub.pkl # 
+aligned_subtitles_path:  /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_id_sub.pkl
 synonyms_pkl: ../cslr2_t/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
 rgb_frames: null
 llm_root: ../hf/Meta-Llama-3-8B
@@ -35,10 +35,10 @@ cslr2_ckpt: ../cslr2_t/hrn_reproduce_withmask_4G/models/model_best.pth
 bleurt_path: ../hf/BLEURT-20
 pl_dist_path: null #./add_files/pl_dist.pkl
 blip_cap_path: null
-val_episode_ind_path: /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/index/index/val_how2sign_indices.json
+val_episode_ind_path: /lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/index/index/test_how2sign_indices.json
 man_gloss_path: null #../cslr2_t/bobsl/manual_gloss/dense_annotations.06.09.24/
 train_sent_ret_path: ../cslr2_t/bobsl/train_sent_ret.pkl
 val_sent_ret_path: ../cslr2_t/bobsl/val_sent_ret.pkl
 lip_feats_path: nononononono
-train_cap_path: feats_cslr2_pls50_bg50_train_cap_2.json
+train_cap_path: h2s_feats_plsb50_train_cap.json
 spottings_path: null

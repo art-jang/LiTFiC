@@ -32,7 +32,7 @@ model:
   net:
     mm_projector_config:
       hidden_size: 4096
-      projector_type: linear
+      
     llm_config:
       tokenizer_config:
         padding_side: left

@@ -61,7 +61,7 @@ class LanguageDecoder(nn.Module):
         
         self.torch_dtype = torch_dtype
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_llm, **tokenizer_config)
-        self.add_eos_token = True if os.path.basename(pretrained_llm) in ['Meta-Llama-3-8B', 'Meta-Llama-3-8B-Instruct', 'Meta-Llama-3.2-3B', 'Meta-Llama-3.2-1B'] else False
+        self.add_eos_token = True 
 
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -131,7 +131,7 @@ class LanguageDecoder(nn.Module):
         pl_switch = False
 
         # Initial prompt setup for questions
-        questions = ['You are an AI assistant designed to translate a video of a British Sign Language signing sequence obtained from a part of a BBC episode to English.' for _ in questions]
+        questions = ['You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.' for _ in questions]
 
         # Process for non-oracle case
         if not self.oracle:
@@ -319,7 +319,7 @@ class LanguageDecoder(nn.Module):
                 previous_contexts = ['' for _ in range(len(subtitles))]
 
         # Initial prompt setup for questions
-        questions = ['You are an AI assistant designed to translate a video of a British Sign Language signing sequence obtained from a part of a BBC episode to English.' for _ in questions]
+        questions = ['You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.' for _ in questions]
 
         # Process for non-oracle case
         if not self.oracle:

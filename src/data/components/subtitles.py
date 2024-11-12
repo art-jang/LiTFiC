@@ -101,8 +101,14 @@ class Subtitles(Dataset):
 
         
         self.how2sign = False
-        if aligned_subtitles_path == "/lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_subtitles.pkl":
+        if aligned_subtitles_path == "/lustre/fswork/projects/rech/vvh/upk96qz/datasets/How2Sign/subtitle/realigned_id_sub.pkl":
             self.how2sign = True
+        
+        if self.how2sign and setname=="man_val":
+            setname = "test"
+            subtitles_max_duration = 1000000
+            subtitles_min_duration = 0
+            subtitles_random_offset = 0.0
         
         
         if not use_man_gloss:
@@ -111,6 +117,9 @@ class Subtitles(Dataset):
                 setname = "val"
             elif setname == "public_test":
                 subtitles_path = aligned_subtitles_path
+                subtitles_max_duration = 1000000
+                subtitles_min_duration = 0
+                subtitles_random_offset = 0.0
         
             with open(subtitles_path, "rb") as pickle_f:
                 self.subtitles = pickle.load(pickle_f)
@@ -183,6 +192,19 @@ class Subtitles(Dataset):
                 )[0],
             )
             self.filter_subtitles(filtered_indices)
+        
+        if setname == 'public_test':
+            filtered_indices = []
+            for i in range(len(self.subtitles["subtitle"])):
+                pattern = r"\[([A-Z\-]+)\]"
+                match = re.search(pattern, self.subtitles["subtitle"][i])
+                if match is None:
+                    filtered_indices.append(i)
+                else:
+                    print(self.subtitles["subtitle"][i])
+            if len(filtered_indices) > 0:
+                filtered_indices = np.array(filtered_indices)
+                self.filter_subtitles(filtered_indices)
 
         self.train_cap = json.load(open(train_cap_path, "rb"))
         self.train_cap_prob = train_cap_prob
@@ -519,8 +541,12 @@ class Subtitles(Dataset):
                 if self.subtitles["episode_name"][idx - i - 1] != self.subtitles["episode_name"][idx]:
                     continue
 
-                if self.setname == "train" and random.random() < self.train_cap_prob and not self.how2sign:
-                    prev_text = self.train_cap[str(self.subtitles["id"][idx - i - 1])]["pred"]
+                if self.setname == "train" and random.random() < self.train_cap_prob:
+                    try:
+                        prev_text = self.train_cap[str(self.subtitles["id"][idx - i - 1])]["pred"]
+                    except:
+                        prev_text = self.subtitles["subtitle"][idx - i - 1]
+                        prev_text = sample_sub_prev(prev_text, pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
 
                     if previous_context is None:
                         previous_context = prev_text

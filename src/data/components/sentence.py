@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
-from src.utils.data_utils import sample_sub, cleanup_sub, process_cslr2_pls, replace_random_word_with_synonym, get_annotations_in_time_range
+from src.utils.data_utils import sample_sub, cleanup_sub, process_cslr2_pls, replace_random_word_with_synonym, get_annotations_in_time_range, remove_words
 from src.utils.cslr_tools import compress_and_average
 import os
 import random
@@ -86,6 +86,7 @@ class Sentences(Dataset):
         train_cap_prob: Optional[float] = 0.0,
         aligned_subtitles_path: Optional[str] = None,
         spottings_path: Optional[str] = None,
+        sub_aug_drop: Optional[bool] = False,
     ):
         """
         Args:
@@ -266,6 +267,8 @@ class Sentences(Dataset):
         self.spottings = None
         if spottings_path is not None:
             self.spottings = pickle.load(open(spottings_path, "rb"))
+        
+        self.sub_aug_drop = sub_aug_drop
         
 
 
@@ -571,9 +574,14 @@ class Sentences(Dataset):
             spottings = list(set(spottings))
         else:
             spottings = []
+        
+        subtitle = cleanup_sub(subtitle)
+
+        if self.sub_aug_drop and random.random() < 0.5:
+            subtitle = remove_words(subtitle, max_p=0.2)
 
         return {
-            "subtitle": cleanup_sub(subtitle),
+            "subtitle": subtitle,
             "features": feats if self.features is not None else None,
             "target_indices": target_indices if self.pseudo_label is not None else None,
             "target_labels": target_labels if self.pseudo_label is not None else None,
@@ -628,6 +636,104 @@ class Sentences(Dataset):
                                     id = subtitles["id"],
                                     prev_start=subtitles["prev_start"],
                                     prev_end=subtitles["prev_end"],)
+
+    def get_pls(self, vid_name, start, end):
+
+        probs, labels, min_count_indices = None, None, None
+        target_word_embds = None
+        if self.pseudo_label is not None:
+            labels, probs = self.pseudo_label.load_sequence(
+                episode_name=vid_name,
+                begin_frame=int(start * self.subtitles.fps),
+                end_frame=int(end * self.subtitles.fps),
+            )
+            if self.synonym_grouping:
+                words = itemgetter(
+                    *rearrange(labels.numpy(), "t k -> (t k)")
+                )(self.inverted_vocab)
+                words = rearrange(
+                    np.array(words), "(t k) -> t k", k=5,
+                )
+                new_words, new_probs = [], []
+                for word, prob in zip(words, probs):
+                    new_prob, new_word = self.synonym_combine(word, prob)
+                    new_words.append(new_word)
+                    new_probs.append(new_prob)
+                new_words = rearrange(np.array(new_words), "t k -> (t k)")
+                labels = itemgetter(*new_words)(self.vocab)
+                labels = rearrange(torch.tensor(labels), "(t k) -> t k", k=5)
+                probs = torch.stack(new_probs)
+            if self.pl_min_count > 1:
+                # torch-based method
+                _, counts = torch.unique_consecutive(labels[:, 0], return_counts=True)
+                repeated_counts = torch.repeat_interleave(counts, counts)
+                min_count_indices = torch.where(repeated_counts >= self.pl_min_count)[0]
+            else:
+                min_count_indices = torch.arange(start=0, end=len(labels))
+            
+            if self.word_embds is not None:
+                word_embds_dict = {}
+            annotation_dict, target_dict = {}, {}
+
+            annotation_dict_post, target_dict_post = {}, {}
+            word_embds_dict_post = {}
+            prob_list = []
+
+            for annotation_idx, (prob, label) in enumerate(zip(probs, labels)):
+                # with enumerate, we save tensor(idx) as key
+                # using range, we can directly have idx as key
+                prob = prob[0].item()
+                label = label[0].item()
+                # convert annotation_idx to feature_idx
+                correct_annotation_idx = int(
+                    annotation_idx * self.pseudo_label.lmdb_stride / \
+                        (2 * self.pseudo_label.load_stride)
+                )
+                if prob >= self.pl_filter and annotation_idx in min_count_indices:
+                    # only keep annotations with
+                    # 1) prob >= pl_filter
+                    # 2) occuring at least pl_min_count times
+                    prob_list.append(prob)
+                    try:
+                        target_dict_post[correct_annotation_idx].append(label)
+                    except KeyError:
+                        target_dict_post[correct_annotation_idx] = [label]
+                    annotation_list = [
+                        int(int(start * self.subtitles.fps) + correct_annotation_idx),
+                        "pseudo-label", prob,
+                    ]
+                    try:
+                        annotation_dict_post[label].append(annotation_list)
+                    except KeyError:
+                        annotation_dict_post[label] = [annotation_list]
+                    if self.word_embds is not None:
+                        word_embds_dict_post[correct_annotation_idx] = self.word_embds[label]
+                
+                try:
+                    target_dict[correct_annotation_idx].append(label)
+                except KeyError:
+                    target_dict[correct_annotation_idx] = [label]
+                annotation_list = [
+                    int(int(start * self.subtitles.fps) + correct_annotation_idx),
+                    "pseudo-label", prob,
+                ]
+                try:
+                    annotation_dict[label].append(annotation_list)
+                except KeyError:
+                    annotation_dict[label] = [annotation_list]
+                if self.word_embds is not None:
+                    word_embds_dict[correct_annotation_idx] = self.word_embds[label]
+            # video augmentation
+            probs_cp = prob_list
+            pls = [self.inverted_vocab[x[0]] for x in list(target_dict_post.values())]
+
+            pls, probs_cp = compress_and_average(pls, probs_cp)
+
+            return pls, probs_cp
+        
+        else:
+            return [], []
+            
 
 
 def pad_tensors_and_create_attention_masks(tensor_list, padding_side='right'):
