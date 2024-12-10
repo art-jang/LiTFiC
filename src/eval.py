@@ -81,8 +81,6 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info("Starting testing!")
     trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
-    # for predictions use trainer.predict(...)
-    # predictions = trainer.predict(model=model, dataloaders=dataloaders, ckpt_path=cfg.ckpt_path)
 
     metric_dict = trainer.callback_metrics
 
@@ -95,9 +93,6 @@ def main(cfg: DictConfig) -> None:
 
     :param cfg: DictConfig configuration composed by Hydra.
     """
-    # apply extra utilities
-    # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
-    # extras(cfg)
 
     evaluate(cfg)
 

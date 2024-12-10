@@ -119,11 +119,6 @@ def main(cfg: DictConfig) -> Optional[float]:
     :param cfg: DictConfig configuration composed by Hydra.
     :return: Optional[float] with optimized metric value.
     """
-    # attach debugger
-    # debugpy.listen(8080)
-    # print("Waiting for client")
-    # debugpy.wait_for_client()
-    # print("Debugger attached")
 
 
     # apply extra utilities

@@ -154,3 +154,7 @@ slurm_logs/
 
 # Aim logging
 .aim
+
+/add_files/
+/bsl-1k/
+qualitative*

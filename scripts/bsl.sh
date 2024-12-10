@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=llama_ablation_extract # job name
+#SBATCH --job-name=llama_bsl_run # job name
 #SBATCH --account=ewl@h100                # project code
 #SBATCH -C h100
 #SBATCH --ntasks-per-node=4             # number of MPI tasks per node
 #SBATCH --nodes=1                      # number of nodes
 #SBATCH --gres=gpu:4                     # number of GPUs per node                         # number of nodes
-#SBATCH --qos=qos_gpu_h100-t3                  # (20h) jobs
+#SBATCH --qos=qos_gpu_h100-t4                  # (20h) jobs
 #SBATCH --cpus-per-task=15                 # number of cores per tasks
 #SBATCH --hint=nomultithread              # we get physical cores not logical
-#SBATCH --time=1:30:00                 # maximum execution time (HH:MM:SS)
+#SBATCH --time=40:00:00                 # maximum execution time (HH:MM:SS)
 #SBATCH --output=/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/slurm_logs/llama_%j.out # output file name
 #SBATCH --error=/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/slurm_logs/llama_%j.err  # error file name
 
@@ -28,12 +28,10 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 # paths.subtitles_path='/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/hy_data/acmmm_pseudo_subtitles_v3.pkl'\
-    # paths.llm_root="../hf/Llama-3.2-3B"\
-    # model.net.mm_projector_config.hidden_size=3072\
-srun python src/eval.py task_name=llama_hf_pls_prev_test experiment=llama3_haran paths=haran \
-    ckpt_path="logs/llama_hf_pls_prev/runs/2024-11-12_00-14-39/checkpoints/epoch_epoch\=005.ckpt"\
-    data.test_setname="public_test"\
-    model.net.llm_config.bg_desc=False\
+    # paths.llm_root="../hf/Llama-3.2-1B"\
+    # model.net.mm_projector_config.hidden_size=2048\
+srun python src/train.py task_name=llama_combine_all experiment=llama3_haran_bsl paths=haran \
+    model.net.llm_config.bg_desc=True\
     model.net.llm_config.use_pl_w_feats=True\
     model.net.llm_config.use_rec_prev=True\
     model.net.llm_config.use_prev_pls=False\
@@ -44,10 +42,11 @@ srun python src/eval.py task_name=llama_hf_pls_prev_test experiment=llama3_haran
     data.dataset_config.filter_based_on_pls=False\
     data.dataset_config.aug_prev_neg=False\
     data.dataset_config.aug_prev_neg_prob=0.5\
-    data.dataset_config.aug_prev=False\
+    data.dataset_config.aug_prev=True\
     data.dataset_config.aug_prev_pct=0.5\
     data.dataset_config.train_cap_prob=0.5\
     data.dataset_config.sub_syn_aug_prob=0.0\
+    data.dataset_config.sub_aug_drop=True\
     model.net.mm_projector_config.cslr2_options.use=False\
     model.net.llm_config.lora=True\
     model.net.llm_config.freeze_decoder=False\
@@ -55,10 +54,12 @@ srun python src/eval.py task_name=llama_hf_pls_prev_test experiment=llama3_haran
     model.net.llm_config.drop_bg_sw=True\
     model.context_len=1\
     model.net.llm_config.mix_in_ret_prob=1.0\
-    model.net.llm_config.mix_in_pls_prob=1.0\
-    model.net.llm_config.mix_in_prev_prob=1.0\
-    model.net.llm_config.mix_in_bg_prob=1.0\
+    model.net.llm_config.mix_in_pls_prob=0.5\
+    model.net.llm_config.mix_in_prev_prob=0.5\
+    model.net.llm_config.mix_in_bg_prob=0.5\
     model.net.llm_config.mix_in_prev_pls=1.0\
     model.net.llm_config.mix_in_spottings=1.0\
-    model.net.llm_config.drop_bgw_pct=0.0\
-    model.net.llm_config.drop_pl_pct=0.0\
+    model.net.llm_config.drop_bgw_pct=0.5\
+    model.net.llm_config.drop_pl_pct=0.5\
+
+

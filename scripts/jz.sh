@@ -30,10 +30,10 @@ export WANDB_MODE=offline
 # paths.subtitles_path='/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/hy_data/acmmm_pseudo_subtitles_v3.pkl'\
     # paths.llm_root="../hf/Llama-3.2-1B"\
     # model.net.mm_projector_config.hidden_size=2048\
-srun python src/train.py task_name=llama_hf_sa_all experiment=llama3_haran paths=haran \
+srun python src/train.py task_name=llama_hf_pls_bg experiment=llama3_haran paths=haran \
     model.net.llm_config.bg_desc=True\
     model.net.llm_config.use_pl_w_feats=True\
-    model.net.llm_config.use_rec_prev=True\
+    model.net.llm_config.use_rec_prev=False\
     model.net.llm_config.use_prev_pls=False\
     model.net.llm_config.ret_sent=False\
     model.net.llm_config.use_gt_prev=False\
@@ -46,7 +46,7 @@ srun python src/train.py task_name=llama_hf_sa_all experiment=llama3_haran paths
     data.dataset_config.aug_prev_pct=0.5\
     data.dataset_config.train_cap_prob=0.5\
     data.dataset_config.sub_syn_aug_prob=0.0\
-    data.dataset_config.sub_aug_drop=True\
+    data.dataset_config.sub_aug_drop=False\
     model.net.mm_projector_config.cslr2_options.use=False\
     model.net.llm_config.lora=True\
     model.net.llm_config.freeze_decoder=False\

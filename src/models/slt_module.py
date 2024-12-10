@@ -495,8 +495,6 @@ class SLTLitModule(LightningModule):
         tensor_preds = strings_to_tensor(self.all_preds[idx])
         tensor_gt = strings_to_tensor(self.all_gts)
 
-        # m_preds_tensor = self.all_gather(tensor_preds)
-        # m_gt_tensor = self.all_gather(tensor_gt)
 
         m_preds_tensor = self.gather_and_concatenate(tensor_preds)
         m_gt_tensor = self.gather_and_concatenate(tensor_gt)
@@ -510,8 +508,6 @@ class SLTLitModule(LightningModule):
         hypotheses = self.tokenizer.tokenize(hypotheses)
         references = self.tokenizer.tokenize(references)
         
-        # hypotheses = {'image'+str(i): [all_preds[i]] for i in range(len(all_preds))}
-        # references = {'image'+str(i): [all_gts[i]] for i in range(len(all_gts))}
 
         bleu_score = self.bleu.compute_score(hypotheses, references)[0][3]
         rouge_score = self.rouge.compute_score(references, hypotheses)[0]

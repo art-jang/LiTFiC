@@ -230,6 +230,12 @@ def cleanup_sub(sent):
     if sent[-1] == "'":
         sent = sent[:-1]
     
+    if sent[0] == " ":
+        sent = sent[1:]
+    if sent[-1] == " ":
+        sent = sent[:-1]
+    sent = re.sub(r'\s+',' ', sent)
+    
     # sent = sent.lower()
     # sent = fix_contractions(sent)
     # sent = remove_punctuation(sent)

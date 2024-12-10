@@ -48,7 +48,7 @@ net:
       batch_first: True
       depth: 2
     cslr2_options:
-      use: True
+      use: False
       ckpt_path: ${paths.cslr2_ckpt}
       freeze: True
     dropout: 0.0
@@ -84,6 +84,7 @@ net:
     drop_pl_pct: 0.0
     use_spottings: False
     mix_in_spottings: 0.0
+    dropout: 0.0
     lora_config:
       target_modules: ['q_proj', 'v_proj']
       lora_alpha: 16
@@ -145,4 +146,3 @@ output_dir: ${paths.output_dir}
 bleurt_path: ${paths.bleurt_path}
 context_len: 1
 synonyms_pkl: ${paths.synonyms_pkl}
-

@@ -47,6 +47,7 @@ class LanguageDecoder(nn.Module):
                  drop_pl_pct = 0.0,
                  use_spottings = False,
                  mix_in_spottings = 0.0,
+                 dropout=0.0,
                  **kwargs):
         super(LanguageDecoder, self).__init__()
         if precision == "bf16-mixed":
@@ -69,6 +70,8 @@ class LanguageDecoder(nn.Module):
                                                             torch_dtype=torch_dtype,
                                                             **decoder_config)
         self.torch_dtype = torch_dtype
+
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
         self.embed_tokens = self.decoder.model.embed_tokens
         self.lora = lora
@@ -497,6 +500,7 @@ class LanguageDecoder(nn.Module):
 
     def _forward(self, x, video_masks, subtitles, questions=None, previous_contexts=None, pls=None, sub_gt=None, probs=None, ret = False, background_description=None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
         inputs_embeds, attn_masks, labels, position_ids = self._process(x, video_masks, subtitles, questions, previous_contexts, device=x.device, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)
+        inputs_embeds = self.dropout(inputs_embeds)
         outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=attn_masks, position_ids=position_ids, return_dict=True)
         if not self.training and not ret:
             gen_sentences, avg_conf = self._predict(x, video_masks, subtitles, questions, previous_contexts, pls=pls, sub_gt=sub_gt, probs=probs, background_description=background_description, rec_prev=rec_prev, rec_prev_conf=rec_prev_conf, man_gloss=man_gloss, ret_sent=ret_sent, lip_feats=lip_feats, lip_masks=lip_masks, prev_pls=prev_pls, prev_pls_probs=prev_pls_probs, spottings=spottings)

@@ -136,6 +136,7 @@ class LMDBLoader(object):
                     with self.lmdb.begin() as txn:
                         labels = torch.zeros((5,), dtype=torch.long)
                         probs = torch.zeros((5,), dtype=torch.float16)
+
                         try:
                             labels = torch.frombuffer(txn.get(label_key), dtype=torch.long)
                             probs = torch.frombuffer(txn.get(prob_key), dtype=torch.float16)

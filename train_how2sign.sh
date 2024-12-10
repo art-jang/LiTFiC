@@ -1,4 +1,4 @@
-python src/train.py trainer.devices=[1] task_name=bobsl_baseline experiment=llama3 \
+python src/train.py trainer.devices=[1] task_name=how2sign_baseline experiment=llama3 data=how2sign paths=how2sign_youngjoon.yaml \
 model.net.llm_config.bg_desc=False \
 model.net.llm_config.use_rec_prev=False \
 model.net.llm_config.ret_sent=False \
@@ -15,5 +15,7 @@ model.net.llm_config.mix_in_pls_prob=1.0 \
 model.net.llm_config.mix_in_prev_prob=1.0 \
 model.net.llm_config.mix_in_bg_prob=1.0 \
 model.net.llm_config.mix_in_prev_pls=1.0 \
-data.num_workers=4 \
+data.num_workers=0 \
 model.scheduler.warmup_epochs=5 \
+data.dataset_config.feats_lmdb_stride=1 \
+model.net.mm_projector_config.projector_type=conv

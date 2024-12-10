@@ -8,7 +8,7 @@
 #SBATCH --qos=qos_gpu_h100-t3                  # (20h) jobs
 #SBATCH --cpus-per-task=15                 # number of cores per tasks
 #SBATCH --hint=nomultithread              # we get physical cores not logical
-#SBATCH --time=12:00:00                 # maximum execution time (HH:MM:SS)
+#SBATCH --time=8:00:00                 # maximum execution time (HH:MM:SS)
 #SBATCH --output=/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/slurm_logs/llama_%j.out # output file name
 #SBATCH --error=/lustre/fswork/projects/rech/vvh/upk96qz/hrn/vgg_slt/slurm_logs/llama_%j.err  # error file name
 
@@ -28,13 +28,14 @@ conda activate slt
 export HYDRA_FULL_ERROR=1 # to get better error messages if job crashes
 export WANDB_MODE=offline
 # paths.subtitles_path='/lustre/fswork/projects/rech/vvh/upk96qz/datasets/bobsl/hy_data/acmmm_pseudo_subtitles_v3.pkl'\
-srun python src/train.py task_name=llama_h2s_sa_all experiment=llama3_haran_how2sign paths=how2sign \
+srun python src/train.py task_name=llama_h2s_sad_feats experiment=llama3_haran_how2sign paths=how2sign \
     model.net.llm_config.bg_desc=False\
-    model.net.llm_config.use_pl_w_feats=True\
-    model.net.llm_config.use_rec_prev=True\
+    model.net.llm_config.use_pl_w_feats=False\
+    model.net.llm_config.use_rec_prev=False\
     model.net.llm_config.use_prev_pls=False\
     model.net.llm_config.ret_sent=False\
     model.net.llm_config.oracle=False\
+    model.net.llm_config.dropout=0.2\
     data.dataset_config.max_previous_sentences=1\
     data.dataset_config.filter_based_on_pls=False\
     data.dataset_config.aug_prev_neg=False\
