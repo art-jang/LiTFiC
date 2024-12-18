@@ -23,34 +23,10 @@ net:
   _target_: src.models.components.vgg_slt.VggSLTNet
   load_features: ${data.dataset_config.load_features}
   precision: ${trainer.precision}
-  visual_encoder_config:
-    encoder_type: null
-    out_dim: 768
   mm_projector_config:
-    mm_hidden_size: ${model.net.visual_encoder_config.out_dim}
+    mm_hidden_size: 768
     hidden_size: 3072
     projector_type: mlp2x_gelu
-    use_qformer: False
-    qformer_config:
-      num_tokens: 10
-      token_dim: 4096
-      memory_dim: 768
-      num_heads: 8
-      num_layers: 2
-      max_memory_pos: 500
-      use_fourier_embeddings: False
-      project_after: False
-    pooling_config:
-      adaptive_pool: False
-      early_fusion: False
-      nhead: 8
-      activation: gelu
-      batch_first: True
-      depth: 2
-    cslr2_options:
-      use: False
-      ckpt_path: ${paths.cslr2_ckpt}
-      freeze: True
     dropout: 0.0
   llm_config:
     pretrained_llm: ${paths.llm_root}
@@ -58,27 +34,15 @@ net:
     freeze_decoder: False
     oracle: False
     lora: True
-    sub_sub: False
-    use_pl_probs: False
     use_pl_w_feats: False
     mix_in_pls: False
     mix_in_pls_prob: 0.5
     mix_in_prev_prob: 0.5
     mix_in_bg_prob: 0.5
     bg_desc: False
-    use_bg_w_sub: False
     use_rec_prev: False
-    min_prev_conf: 0.0
     use_bg_words: False
     drop_bg_sw: False
-    use_man_gloss: False
-    ret_sent: False
-    mix_in_ret_prob: 0.0
-    use_lip_feats: False
-    mix_in_lip_prob: 0.0
-    use_prev_pls: False
-    use_prev_pls_probs: False
-    mix_in_prev_pls: 0.0
     use_gt_prev: False
     drop_bgw_pct: 0.0
     drop_pl_pct: 0.0
@@ -99,46 +63,6 @@ net:
     decoder_config:
       trust_remote_code: True
       attn_implementation: flash_attention_2
-  cslr2_config:
-      _target_: src.models.components.vgg_slt_modules.cslr.cslr2.CSLR2
-      video_encoder:
-        _target_: src.models.components.vgg_slt_modules.cslr.transformer_encoder.make_model
-        vocab: 8697
-        N: 6
-        d_model: 768
-        h: 8
-        dropout: 0.1
-        contrastive: True
-      text_encoder:
-        _target_: src.models.components.vgg_slt_modules.cslr.t5.make_sentence_model
-        model_name: t5-large
-        root_path: ${paths.lm_root}
-      video_sequence_ll:
-        _target_: torch.nn.Linear
-        in_features: ${model.net.cslr2_config.video_encoder.d_model}
-        out_features: 256
-      video_token_ll:
-        _target_: torch.nn.Linear
-        in_features: ${model.net.cslr2_config.video_encoder.d_model}
-        out_features: ${model.net.cslr2_config.video_sequence_ll.out_features}
-      text_sentence_ll:
-        _target_: torch.nn.Linear
-        in_features: 1024  # size of text encoder embds
-        out_features: ${model.net.cslr2_config.video_sequence_ll.out_features}
-      text_word_ll:
-        _target_: torch.nn.Linear
-        in_features: ${model.net.cslr2_config.text_sentence_ll.in_features}
-        out_features: ${model.net.cslr2_config.video_sequence_ll.out_features}
-      pooling: max
-      sign_ret: True
-      no_video_encoder: False
-      same_text_ll: False
-      same_video_ll: False
-      avg_baseline: True
-  lip_encoder:
-    _target_: src.models.components.vgg_slt_modules.lip_projector.LipEncoder
-    lip_feat_dim: 512
-    out_dim: 4096
 # compile model for faster training with pytorch 2.0
 compile: false
 frames_path: ${paths.rgb_frames}

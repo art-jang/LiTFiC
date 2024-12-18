@@ -2,28 +2,22 @@ from typing import Any, Dict, Tuple
 
 import torch
 from lightning import LightningModule
-from torchmetrics import MaxMetric, MeanMetric
+from torchmetrics import MeanMetric
 
 from src.models.components.loss_modules.ce_loss import CELoss
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 
 from pycocoevalcap.bleu.bleu import Bleu
-from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.cider.cider import Cider
 from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 
-import ipdb
-import lmdb
 import os
 import json
-from tqdm import tqdm
 
 from src.utils.data_utils import CircularBuffer
-from src.utils.gather_utils import strings_to_tensor, tensor_to_strings
-from src.utils.vis_utils import save_video
-from src.utils.ret_utils import copy_tensor, calculate_average_logit_scores, calculate_retrieval_metrics, calculate_overlap_metrics
-from bleurt_pytorch import BleurtConfig, BleurtForSequenceClassification, BleurtTokenizer
+from src.utils.model_utils import strings_to_tensor, tensor_to_strings, calculate_overlap_metrics
+from bleurt_pytorch import BleurtForSequenceClassification, BleurtTokenizer
 
 from nltk.stem import WordNetLemmatizer 
 from nltk.corpus import stopwords, wordnet
@@ -134,12 +128,6 @@ class SLTLitModule(LightningModule):
         self.context_buffer = CircularBuffer(context_len)
         self.context_buffer.ep = None
 
-        self.context_conf_buffer = CircularBuffer(context_len)
-        self.context_conf_buffer.ep = None 
-
-        self.ret_dataloader = None
-        self.rgb_lmdb_env = None
-
         self.vis_dir = f"{output_dir}/vis"
         os.makedirs(self.vis_dir, exist_ok=True)
 
@@ -210,102 +198,6 @@ class SLTLitModule(LightningModule):
     def predict_step(self, batch, batch_idx):
         pass
 
-    def collect_dataset(self, dataloader):
-        result_dict = {}
-    
-        # Iterate through each dictionary in the list
-        for dictionary in dataloader:
-            for key, value in dictionary.items():
-                if key in result_dict:
-                    if isinstance(value, list):
-                        result_dict[key].extend(value)
-                    elif isinstance(value, torch.Tensor):
-                        result_dict[key].extend([value[i] for i in range(value.shape[0])])
-                else:
-                    if isinstance(value, list):
-                        result_dict[key] = value.copy()  # use copy to avoid modifying the original list
-                    elif isinstance(value, torch.Tensor):
-                        result_dict[key] = []
-                        result_dict[key].extend([value[i] for i in range(value.shape[0])])  # use clone to avoid modifying the original tensor
-        
-        return result_dict
-
-    def perform_retrieval(self, dataloader):
-        dataset = self.collect_dataset(dataloader)
-
-        bs = 2
-
-        score_matrix = []
-        
-        for idx in range(len(dataset["pls"])):
-
-            score_row = []
-
-            try:
-                feats = dataset["features"][idx]
-                attn_masks = dataset["attn_masks"][idx]
-
-                feats = copy_tensor(feats, bs)
-                attn_masks = copy_tensor(attn_masks, bs)
-
-                feats = feats.to(self.device)
-                attn_masks = attn_masks.to(self.device)
-            
-            except:
-                feats = torch.zeros(bs, 1, 4096).to(self.device, dtype=self.net.language_decoder.decoder.dtype)
-                attn_masks = torch.zeros(bs, 1).to(self.device, dtype=self.net.language_decoder.decoder.dtype)
-                
-
-            target_indices = [dataset["target_indices"][idx] for _ in range(bs)]
-            target_labels = [dataset["target_labels"][idx] for _ in range(bs)]
-            pls = [dataset["pls"][idx] for _ in range(bs)]
-            sub_gt = [dataset["sub_gt"][idx] for _ in range(bs)]
-            probs = [dataset["probs"][idx] for _ in range(bs)]
-            previous_contexts = [dataset["previous_contexts"][idx] for _ in range(bs)]
-            questions = [dataset["questions"][idx] for _ in range(bs)]
-            bg_description = [dataset["bg_description"][idx] for _ in range(bs)]
-            
-            for idx2 in tqdm(range(0, len(dataset["pls"]), bs)):
-
-                tmp_batch = {
-                        "features": feats,
-                        "attn_masks": attn_masks,
-                        "subtitles": dataset["subtitles"][idx2:idx2+bs],
-                        "questions": questions,
-                        "previous_contexts": previous_contexts,
-                        "pls": pls,
-                        "target_indices": target_indices,
-                        "target_labels": target_labels,
-                        "start": dataset["start"][idx2:idx2+bs],
-                        "end": dataset["end"][idx2:idx2+bs],
-                        "video_names": dataset["video_names"][idx2:idx2+bs],
-                        "sub_gt": sub_gt,
-                        "probs": probs,
-                        "bg_description": bg_description
-                }
-                with torch.no_grad():
-                    outputs_list, labels_list, _, _ = self.forward(tmp_batch, ret=True)
-
-                    if len(score_row) == 0:
-                        for _ in range(len(outputs_list)):
-                            score_row.append([])
-                    if len(score_matrix) == 0:
-                        for _ in range(len(outputs_list)):
-                            score_matrix.append([])
-                
-                for idx3, (outputs, labels) in enumerate(zip(outputs_list, labels_list)):
-                    scores = calculate_average_logit_scores(outputs["logits"], labels)
-                    score_row[idx3].extend(scores)
-
-            for idm in range(len(score_row)):
-                score_matrix[idm].append(score_row[idm])
-
-        ret_metrics_list = []
-        for i in range(len(score_matrix)):
-            ret_metrics = calculate_retrieval_metrics(score_matrix[i])
-            ret_metrics_list.append(ret_metrics)
-        
-        return ret_metrics_list  
    
     def get_bleurt_scores(self, references, candidates, batch_size = 16):
         self.bleurt_model.eval()
@@ -357,47 +249,32 @@ class SLTLitModule(LightningModule):
             elif self.context_buffer.ep != batch["video_names"][0]:
                 self.context_buffer.clear()
             batch["rec_prev"] = [self.context_buffer.get_all_elements()]
-            batch["rec_prev_conf"] = [self.context_conf_buffer.get_all_elements()]
 
-        outputs_list, labels_list, preds_list, avg_conf_list = self.forward(batch)
+        outputs, labels, preds = self.forward(batch)
 
-        if len(self.all_preds) == 0 and preds_list is not None:
-            self.all_preds = [[] for _ in range(len(preds_list))]
-            self.avg_confs = [[] for _ in range(len(preds_list))]
         
-        loss = self.criterion(outputs_list[0], labels_list[0])
+        loss = self.criterion(outputs, labels)
         
 
-        if preds_list is not None:
-            for idx_p, preds in enumerate(preds_list):
-                for ip, pred in enumerate(preds):
-                    decoded_pred = self.net.language_decoder.tokenizer.decode(pred, skip_special_tokens=True)
-                    self.all_preds[idx_p].append(decoded_pred)
-                    self.avg_confs[idx_p].append(avg_conf_list[idx_p][ip])
-                    if len(self.all_preds) == 1 or idx_p == 1:
-                        self.context_buffer.append(decoded_pred)
-                        self.context_conf_buffer.append(avg_conf_list[idx_p][ip])
+        if preds is not None:
+            for _, pred in enumerate(preds):
+                decoded_pred = self.net.language_decoder.tokenizer.decode(pred, skip_special_tokens=True)
+                self.all_preds.append(decoded_pred)
+                self.context_buffer.append(decoded_pred)
                 
             self.all_gts.extend(batch["subtitles"])
             self.pls.extend(batch['pls'])
             self.starts.extend(batch['start'])
             self.ends.extend(batch['end'])
             self.names.extend(batch['video_names'])
-            self.sub_gts.extend(batch['sub_gt'])
-            self.probs.extend(batch['probs'])
             self.blip_cap.extend(batch['bg_description'])
             self.rec_prev.extend(batch['rec_prev'])
-            self.rec_prev_conf.extend(batch['rec_prev_conf'])
-            self.prev_pls.extend(batch['prev_pls'])
-            self.prev_pls_probs.extend(batch['prev_pls_probs'])
             try:
                 self.ids.extend([int(x) for x in batch['ids']])
             except:
                 self.ids.extend(batch['ids'])
-            # if batch['previous_contexts'] is not None:
-            #     self.prev_context.extend(batch['previous_contexts'])
 
-        return loss, preds_list, labels_list
+        return loss, preds, labels
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -476,23 +353,9 @@ class SLTLitModule(LightningModule):
 
         return concatenated
 
-    def get_cap_metrics(self, idx = 0):
-
-        if self.trainer.testing and len(self.all_preds) > 100000:
-
-            cap_dict = {
-                "gt": self.all_gts,
-                "pred": self.all_preds[idx],
-                "ids": self.ids,
-            }
-            os.makedirs(f"{self.vis_dir}/{self.current_epoch}", exist_ok=True)
-            with open(f"{self.vis_dir}/{self.current_epoch}/cap_{self.global_rank}.json", 'w') as f:
-                json.dump(cap_dict, f)
-            
-            return 0, 0, 0, 0, 0, 0, 0
-
+    def get_cap_metrics(self):
         
-        tensor_preds = strings_to_tensor(self.all_preds[idx])
+        tensor_preds = strings_to_tensor(self.all_preds)
         tensor_gt = strings_to_tensor(self.all_gts)
 
 
@@ -537,7 +400,7 @@ class SLTLitModule(LightningModule):
                 "ids": all_ids,
             }
             os.makedirs(f"{self.vis_dir}/{self.current_epoch}", exist_ok=True)
-            with open(f"{self.vis_dir}/{self.current_epoch}/cap_{idx}.json", 'w') as f:
+            with open(f"{self.vis_dir}/{self.current_epoch}/cap.json", 'w') as f:
                 json.dump(cap_dict, f)
 
 
@@ -545,25 +408,14 @@ class SLTLitModule(LightningModule):
     
     def _eval(self) -> None:
         if self.global_rank == 0 and not self.trainer.testing:
-            hypotheses = {'image'+str(i): [self.all_preds[0][i]] for i in range(len(self.all_preds[0]))}
+            hypotheses = {'image'+str(i): [self.all_preds[i]] for i in range(len(self.all_preds))}
             references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
 
-            iou, precision, recall = calculate_overlap_metrics(self.all_gts, self.all_preds[0])
+            iou, precision, recall = calculate_overlap_metrics(self.all_gts, self.all_preds)
 
             _, rouge_scores  = self.rouge.compute_score(references, hypotheses)
 
-            bleurt_scores = self.get_bleurt_scores(self.all_gts, self.all_preds[0])
-
-            if len(self.all_preds) > 1:
-
-                hypotheses = {'image'+str(i): [self.all_preds[1][i]] for i in range(len(self.all_preds[1]))}
-                references = {'image'+str(i): [self.all_gts[i]] for i in range(len(self.all_gts))}
-
-                iou_pl, precision_pl, recall_pl = calculate_overlap_metrics(self.all_gts, self.all_preds[1])
-
-                _, rouge_scores_pl  = self.rouge.compute_score(references, hypotheses)
-
-                bleurt_scores_pl = self.get_bleurt_scores(self.all_gts, self.all_preds[1])
+            bleurt_scores = self.get_bleurt_scores(self.all_gts, self.all_preds)
 
             vis_list = []
 
@@ -576,82 +428,35 @@ class SLTLitModule(LightningModule):
                 tmp_dict['start'] = self.starts[idx]
                 tmp_dict['end'] = self.ends[idx]
                 tmp_dict['gt'] = self.all_gts[idx]
-                tmp_dict['pred'] = self.all_preds[0][idx]
-                tmp_dict['conf'] = self.avg_confs[0][idx]
+                tmp_dict['pred'] = self.all_preds[idx]
                 tmp_dict['pls'] = self.pls[idx]
-                tmp_dict['sub_gt'] = self.sub_gts[idx]
                 tmp_dict['bleurt'] = bleurt_scores[idx]
-                tmp_dict['prob'] = self.probs[idx]
                 tmp_dict['iou'] = iou[idx]
                 tmp_dict['precision'] = precision[idx]
                 tmp_dict['recall'] = recall[idx]
                 tmp_dict['blip_cap'] = self.blip_cap[idx]
                 tmp_dict['rec_prev'] = self.rec_prev[idx]
-                tmp_dict['rec_prev_conf'] = self.rec_prev_conf[idx]
-                tmp_dict['prev_pls'] = self.prev_pls[idx]
-                tmp_dict['prev_pls_probs'] = self.prev_pls_probs[idx]
-                if len(self.all_preds) > 1:
-                    tmp_dict["pred_pls"] = self.all_preds[1][idx]
-                    tmp_dict["conf_pls"] = self.avg_confs[1][idx]
-                    tmp_dict["bleurt_pls"] = bleurt_scores_pl[idx]
-                    tmp_dict["rouge_pls"] = rouge_scores_pl[idx]
-                    tmp_dict["iou_pls"] = iou_pl[idx]
-                    tmp_dict["precision_pls"] = precision_pl[idx]
-                    tmp_dict["recall_pls"] = recall_pl[idx]
+            
 
                 if len(self.prev_context) > 0:
                     tmp_dict['prev_contexts'] = self.prev_context[idx] 
                 
                 vis_list.append(tmp_dict)
-                if self.rgb_lmdb_env is not None:
-                    save_video(self.names[idx], self.starts[idx], self.ends[idx], f"{self.vis_dir}/{self.current_epoch}/{idx}.mp4", self.rgb_lmdb_env)
-            
+                
             with open(f'{self.vis_dir}/{self.current_epoch}/info.json', 'w') as f:
                 json.dump(vis_list, f)
 
 
-        for idx_p in range(len(self.all_preds)):
-            bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall = self.get_cap_metrics(idx_p)
-            if len(self.all_preds) > 1:
-                self.log(f"bleu_{idx_p}", bleu_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log(f"rouge_{idx_p}", rouge_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log(f"cider_{idx_p}", cider_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log(f"bleurt_{idx_p}", bleurt_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log(f"iou_{idx_p}", iou, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log(f"precision_{idx_p}", precision, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log(f"recall_{idx_p}", recall, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-            else:
-                self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log("iou", iou, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log("precision", precision, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
-                self.log("recall", recall, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall = self.get_cap_metrics()
+        self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("rouge", rouge_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("cider", cider_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("bleurt", bleurt_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("iou", iou, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("precision", precision, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("recall", recall, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
-        ret_metrics_list = None
-        # if not self.trainer.sanity_checking:
-        # if not self.trainer.testing:
-        #     ret_metrics_list = self.perform_retrieval(self.ret_dataloader)
-
-        if ret_metrics_list is not None:
-            for idx, ret_metrics in enumerate(ret_metrics_list):
-                if len(self.all_preds) > 1:
-                    self.log(f"R@1_{idx}", ret_metrics["recall_scores"][1], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log(f"R@5_{idx}", ret_metrics["recall_scores"][5], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log(f"R@10_{idx}", ret_metrics["recall_scores"][10], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log(f"R@25_{idx}", ret_metrics["recall_scores"][25], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log(f"R@50_{idx}", ret_metrics["recall_scores"][50], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log(f"mean_rank_{idx}", ret_metrics["mean_rank"], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log(f"median_rank_{idx}", ret_metrics["median_rank"], on_step=False, on_epoch=True, prog_bar=True)
-                else:
-                    self.log("R@1", ret_metrics["recall_scores"][1], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log("R@5", ret_metrics["recall_scores"][5], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log("R@10", ret_metrics["recall_scores"][10], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log("R@25", ret_metrics["recall_scores"][25], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log("R@50", ret_metrics["recall_scores"][50], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log("mean_rank", ret_metrics["mean_rank"], on_step=False, on_epoch=True, prog_bar=True)
-                    self.log("median_rank", ret_metrics["median_rank"], on_step=False, on_epoch=True, prog_bar=True)
+        
 
         self.all_preds = []
         self.all_gts = []
@@ -659,14 +464,10 @@ class SLTLitModule(LightningModule):
         self.starts = []
         self.ends = []
         self.names = []
-        self.sub_gts = []
         self.prev_context = []
         self.blip_cap = []
-        self.probs = []
         self.rec_prev = []
-        self.rec_prev_conf = []
-        self.context_buffer.clear() # log the rec_prev_context
-        self.context_conf_buffer.clear()
+        self.context_buffer.clear()
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.
@@ -683,8 +484,7 @@ class SLTLitModule(LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        if self.ret_dataloader is None:
-            self.ret_dataloader = self.trainer.datamodule.ret_dataloader()
+
         self._eval()
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:

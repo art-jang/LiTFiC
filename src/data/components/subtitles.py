@@ -19,12 +19,6 @@ import re
 import torch
 from tqdm import tqdm
 
-def remove_punctuation(text):
-    punctuation_pattern = r'[^\w\s]'  # Matches any character that is not a word character or whitespace
-    text_without_punctuation = re.sub(punctuation_pattern, '', text)
-
-    return text_without_punctuation
-
 
 class Subtitles(Dataset):
     """Generic dataset to load subtitles from data files"""
@@ -46,25 +40,10 @@ class Subtitles(Dataset):
         fps: int = 25,
         verbose: bool = False,
         blip_cap_path: Optional[str] = None,
-        filter_blip: bool = False,
         aug_prev: bool = False,
         aug_prev_pct: float = 0.5,
         aug_prev_shuffle: bool = False,
-        man_gloss_path=None,
-        use_man_gloss=False,
-        cslr2_pl_type=None,
-        sent_ret_n = 20,
-        train_sent_ret_path = None,
-        val_sent_ret_path = None,
-        filter_based_on_pls = False,
-        pl_configs: Optional[dict] = None,
-        pl_filter: Optional[float] = None,
-        pl_min_count: Optional[int] = None,
-        pl_synonym_grouping: Optional[bool] = None,
         synonyms_pkl: Optional[str] = None,
-        vocab_pkl: Optional[str] = None,
-        aug_prev_neg: Optional[bool] = False,
-        aug_prev_neg_prob: Optional[float] = 0.0,
         train_cap_path: Optional[str] = None,
         train_cap_prob: Optional[float] = 0.0,
         aligned_subtitles_path: Optional[str] = None,
@@ -96,22 +75,19 @@ class Subtitles(Dataset):
         with open(subset2episode, "rb") as json_f:
             subset2episode = json.load(json_f)
         
-        if not use_man_gloss:
-            if setname != 'train':
-                subtitles_max_duration = 1000000
-                subtitles_min_duration = 0
-                subtitles_random_offset = 0.0
-                
-                if aligned_subtitles_path is not None:
-                    subtitles_path = aligned_subtitles_path
+        if setname != 'train':
+            subtitles_max_duration = 1000000
+            subtitles_min_duration = 0
+            subtitles_random_offset = 0.0
+            
+            if aligned_subtitles_path is not None:
+                subtitles_path = aligned_subtitles_path
 
-            with open(subtitles_path, "rb") as pickle_f:
-                self.subtitles = pickle.load(pickle_f)
-            if self.verbose:
-                print(f"Loaded {len(self.subtitles['episode_name'])} subtitles.")
-        else:
-            with open(os.path.join(man_gloss_path, f"{setname}.pkl"), "rb") as pickle_f:
-                self.subtitles = pickle.load(pickle_f)
+        with open(subtitles_path, "rb") as pickle_f:
+            self.subtitles = pickle.load(pickle_f)
+        if self.verbose:
+            print(f"Loaded {len(self.subtitles['episode_name'])} subtitles.")
+        
         
         self.setname = setname
         self.setname_episode = subset2episode[self.setname] # list of all episodes in a particular set
@@ -120,7 +96,7 @@ class Subtitles(Dataset):
         if self.verbose:
             print(f"Loading {self.setname} subtitles.")
         
-        self.use_man_gloss = use_man_gloss
+        # self.use_man_gloss = use_man_gloss
             
         self.subtitles_temporal_shift = subtitles_temporal_shift
         self.subtitles_random_offset = subtitles_random_offset
@@ -147,18 +123,13 @@ class Subtitles(Dataset):
                 f"Filtering to {self.setname} subtitles.",
             )
         
-        if not use_man_gloss:
-            filtered_indices = np.where(
-                np.isin(self.subtitles["episode_name"], self.setname_episode),
-            )[0]
-            self.filter_subtitles(filtered_indices)
+        
+        filtered_indices = np.where(
+            np.isin(self.subtitles["episode_name"], self.setname_episode),
+        )[0]
+        self.filter_subtitles(filtered_indices)
 
-        # if filter_blip:
-        #     filtered_indices = np.where(
-        #         np.isin(self.subtitles["episode_name"], self.blip_cap_data["video"]),
-        #     )[0]
-        #     self.filter_subtitles(filtered_indices)
-        # filter by duration
+
         if self.verbose:
             print(
                 "Filtering to subtitles with duration in" +
@@ -198,33 +169,13 @@ class Subtitles(Dataset):
             self.train_cap = None
             self.train_cap_prob = None
 
-        if filter_based_on_pls and setname == "train":
-            filtered_indices = np.load(f"filtered_indices_pls_{setname}.npy")
-            self.filter_subtitles(filtered_indices)
-            print(f"Filtered based on pseudo-labels. {len(filtered_indices)} subtitles left.")
-
         self.synonyms_dict = pickle.load(open(synonyms_pkl, "rb"))
 
-        sent_ret_path = train_sent_ret_path if setname == "train" else val_sent_ret_path
-        if sent_ret_path is not None:
-            with open(sent_ret_path, "rb") as f:
-                self.sent_ret = pickle.load(f)
-        else:
-            self.sent_ret = None
         
-        # if "id" in self.subtitles.keys():
-        # # filtering sent_ret
-        #     filtered_indices = np.where(
-        #         np.isin(self.subtitles["id"], list(self.sent_ret.keys())),
-        #     )[0]
-
-        #     self.filter_subtitles(filtered_indices)
 
         self.aug_prev = aug_prev
         self.aug_prev_pct = aug_prev_pct
         self.aug_prev_shuffle = aug_prev_shuffle
-        self.aug_prev_neg = aug_prev_neg
-        self.aug_prev_neg_prob = aug_prev_neg_prob
 
         self.info_file_idx = {}
         with open(info_pkl, "rb") as pickle_f:
@@ -259,10 +210,6 @@ class Subtitles(Dataset):
                 self.question_pool = [line.strip() for line in f.readlines()]
         else:
             self.question_pool = None
-        
-        self.cslr2_pl_type = cslr2_pl_type
-
-        self.sent_ret_n = sent_ret_n
         
         
     def fix_synonyms_dict(self) -> None:
@@ -405,8 +352,6 @@ class Subtitles(Dataset):
         subtitles, sub_starts, sub_ends, video_names = subtitle, sub_start, sub_end, video_name
 
         previous_context = None
-        prev_start = []
-        prev_end = []
         if self.max_previous_sentences > 0:
             num_sentences = self.max_previous_sentences
             for i in range(num_sentences):
@@ -430,14 +375,9 @@ class Subtitles(Dataset):
                         continue
                 
                 prev_text = self.subtitles["subtitle"][idx - i - 1]
-                if self.aug_prev_neg and  random.random() < random.random() * self.aug_prev_neg_prob and self.setname == "train":
-                    prev_text = random.sample(self.subtitles["subtitle"].tolist(), 1)[0]
                 
                 if self.aug_prev and self.setname == "train":
                     prev_text = sample_sub_prev(prev_text, pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
-
-                prev_start.append(self.subtitles["start"][idx - i - 1])
-                prev_end.append(self.subtitles["end"][idx - i - 1])
 
                 if previous_context is None:
                     previous_context = prev_text
@@ -447,16 +387,8 @@ class Subtitles(Dataset):
             if previous_context is None:
                 previous_context = ""
         
-        for i in range(len(prev_start)):
-            if prev_end[i] - prev_start[i] <= 0.5:
-                prev_start[i] = max(0, prev_end[i] - 1.0)
-
-        prev_start = []
-        prev_end = []
+       
         
-        man_gloss = None
-        if self.use_man_gloss:
-            man_gloss = self.subtitles["man_gloss"][idx].strip().split()
         question = None
         if self.question_pool is not None:
             if self.setname == "train":
@@ -480,40 +412,7 @@ class Subtitles(Dataset):
         
         else:
             bg_description = 'No description available.'
-        
-
-        cslr2_labels = None
-        cslr2_probs = None
-        
-        if "nn_label" in self.subtitles.keys():
-            if self.cslr2_pl_type == "nn":
-                label_key = "nn_label"
-                prob_key = "nn_prob"
-            else:
-                label_key = "class_label"
-                prob_key = "class_prob"
-            
-            cslr2_labels = self.subtitles[label_key][idx][0]
-            cslr2_probs = self.subtitles[prob_key][idx][0]
-        
-        ret_sent = ""
-        # if "id" in self.subtitles.keys():
-        #     if self.setname == "train":
-        #         ret_sent = self.sent_ret[self.subtitles["id"][idx]]
-        #         # select an index at random from ret_sent in the top self.sent_ret_n
-        #         if len(ret_sent) > 0:
-        #             ret_sent = random.choice(ret_sent[:self.sent_ret_n])
-        #         else:
-        #             ret_sent = ""
-            
-        #     else:
-        #         ret_sent = self.sent_ret[self.subtitles["id"][idx]]
-        #         # select the first index from ret_sent in the top self.sent_ret_n
-        #         if len(ret_sent) > 0:
-        #             ret_sent = ret_sent[0]
-        #         else:
-        #             ret_sent = ""
-
+                
         
         return {
             "subtitle": subtitles,
@@ -522,12 +421,6 @@ class Subtitles(Dataset):
             "video_name": video_names,
             "previous_context": previous_context,
             "question": question,
-            "bg_description": bg_description,   
-            "man_gloss": man_gloss,
-            "cslr2_labels": cslr2_labels,
-            "cslr2_probs": cslr2_probs,
-            "ret_sent": ret_sent,
+            "bg_description": bg_description,
             "id": self.subtitles["id"][idx] if "id" in self.subtitles.keys() else None,
-            "prev_start": prev_start,
-            "prev_end": prev_end,
         }

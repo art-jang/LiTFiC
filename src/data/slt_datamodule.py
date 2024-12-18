@@ -31,12 +31,10 @@ class SLTDataModule(LightningDataModule):
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
-        self.data_ret: Optional[Dataset] = None
 
         self.batch_size_per_device = batch_size
         self.eval_data_size = eval_data_size
         self.train_data_fraction = train_data_fraction
-        self.ret_data_size = ret_data_size
         self.test_setname = test_setname
 
         self.dataset = dataset
@@ -66,21 +64,10 @@ class SLTDataModule(LightningDataModule):
             else:
                 self.data_val = Sentences(**self.hparams.dataset_config, setname="val")
 
-            self.data_ret = Subset(self.data_val,
-                                torch.randperm(
-                                    len(self.data_val)
-                                )[:self.ret_data_size],
-                            )
             self.data_test = Sentences(**self.hparams.dataset_config, setname=self.test_setname)
-            self.data_train = Subset(
-                                self.data_train,
-                                torch.randperm(
-                                    len(self.data_train)
-                                )[:int(len(self.data_train) * self.train_data_fraction)],
-                            )
-            if self.hparams.extra_dataset_config is not None:
-                extra_data_train = Sentences(**self.hparams.extra_dataset_config, setname="train")
-                self.data_train = torch.utils.data.ConcatDataset([self.data_train, extra_data_train])
+            # if self.hparams.extra_dataset_config is not None:
+            #     extra_data_train = Sentences(**self.hparams.extra_dataset_config, setname="train")
+            #     self.data_train = torch.utils.data.ConcatDataset([self.data_train, extra_data_train])
 
         if self.hparams.collate_fn is not None:
             from importlib import import_module
@@ -187,21 +174,6 @@ class SLTDataModule(LightningDataModule):
         return DataLoader(
             dataset=dataset,
             batch_size=1,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=False,
-            collate_fn=self.collate_fn,
-            sampler=None
-        )
-
-    def ret_dataloader(self) -> DataLoader[Any]:
-        """Create and return the retrieval dataloader.
-
-        :return: The retrieval dataloader.
-        """
-        return DataLoader(
-            dataset=self.data_ret,
-            batch_size=self.batch_size_per_device,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,

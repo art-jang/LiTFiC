@@ -59,40 +59,12 @@ dataset_config:
 
   # other parameters
   verbose: True
-  sub_sample_shuffle: False 
-  sub_sample_pct: 0.5
-  sub_sample_replace: False
-  drop_stopwords: False
-  sw_level: 0
-  pl_dist_path: ${paths.pl_dist_path}
   blip_cap_path: ${paths.blip_cap_path}
-  filter_blip: False
 
   aug_prev: False
   aug_prev_pct: 0.5
   aug_prev_shuffle: False
 
-  aug_prev_neg: False
-  aug_prev_neg_prob: 0.0
-
-  sub_syn_aug_prob: 0.0
-
-  man_gloss_path: ${paths.man_gloss_path}
-  use_man_gloss: False
-
-  # cslr2_pl params
-  use_cslr2_pl: False
-  cslr2_pl_type: nn
-
-  # sent ret params
-  sent_ret_n: 20
-  train_sent_ret_path: ${paths.train_sent_ret_path}
-  val_sent_ret_path: ${paths.val_sent_ret_path}
-
-  # lip feat params
-  lip_feats_path: ${paths.lip_feats_path}
-
-  filter_based_on_pls: False
 
   spottings_path: ${paths.spottings_path}
 

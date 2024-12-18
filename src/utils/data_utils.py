@@ -7,6 +7,7 @@ from operator import itemgetter
 import string
 import contractions
 import re
+from collections import defaultdict
 
 from bisect import bisect_left, bisect_right
 
@@ -59,32 +60,6 @@ def drop_words(word_list, pct):
     indices_to_drop = set(random.sample(range(len(word_list)), num_to_drop))
     return [word for i, word in enumerate(word_list) if i not in indices_to_drop]
 
-def split_word_punctuation(word):
-    prefix = ''
-    suffix = ''
-    while word and word[0] in string.punctuation:
-        prefix += word[0]
-        word = word[1:]
-    while word and word[-1] in string.punctuation:
-        suffix = word[-1] + suffix
-        word = word[:-1]
-    return prefix, word, suffix
-
-def replace_random_word_with_synonym(sentence, syn_dict):
-    words = sentence.split()
-    indices_in_dict = []
-    for i, word in enumerate(words):
-        prefix, word_clean, suffix = split_word_punctuation(word)
-        if word_clean.lower() in syn_dict:
-            indices_in_dict.append(i)
-    if indices_in_dict:
-        idx = random.choice(indices_in_dict)
-        word = words[idx]
-        prefix, word_clean, suffix = split_word_punctuation(word)
-        synonym = random.choice(syn_dict[word_clean.lower()])
-        words[idx] = prefix + synonym + suffix
-    return ' '.join(words)
-
 
 def sample_pls(data, num_samples):
     """
@@ -105,59 +80,6 @@ def sample_pls(data, num_samples):
     sampled_words = random.choices(words, weights=probabilities, k=num_samples)
     
     return sampled_words
-
-
-def sample_sub(sentence, shuffle, pct=0.3, replace=False, pl_dist=None, drop_stopwords=False, sw_level=0):
-    words = sentence.split()
-
-    words = [word.strip(string.punctuation).lower() for word in words]
-    # Remove stop words
-    stop_words = {
-                'ourselves', 'hers', 'between', 'yourself', 'but', 'again',
-                'there', 'about', 'once', 'during', 'out', 'very', 'having',
-                'with', 'they', 'own', 'an', 'be', 'some', 'for', 'do', 'its',
-                'yours', 'such', 'into', 'of', 'most', 'itself', 'other', 'off',
-                'is', 's', 'am', 'or', 'who', 'as', 'from', 'him', 'each', 'the',
-                'themselves', 'until', 'below', 'are', 'we', 'these', 'your', 'his',
-                'through', 'don', 'nor', 'me', 'were', 'her', 'more', 'himself', 'this',
-                'down', 'should', 'our', 'their', 'while', 'above', 'both', 'up', 'to', 'ours',
-                'had', 'she', 'all', 'no', 'when', 'at', 'any', 'before', 'them', 'same', 'and',
-                'been', 'have', 'in', 'will', 'on', 'does', 'yourselves', 'then', 'that',
-                'over', 'so', 'can', 'did', 'not', 'now', 'under', 'he', 'you',
-                'herself', 'has', 'just', 'where', 'too', 'only', 'myself', 'which', 'those',
-                'i', 'after', 'few', 'whom', 't', 'being', 'if', 'theirs', 'my', 'against', 'a',
-                'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
-            }
-
-    if sw_level == 0:
-        stop_words = ['i', "you've", 'him', "didn't", 'shouldn', 'yours', 'aren', 'is', 'we', 'haven', 'its', 'themselves', "mightn't", 'his', 'ain', 'not', 'wouldn', 'of', "you'll", "it's", 'mightn', "weren't", 'll', 'such', "you're", 'very', 'needn', 'd', 'the', "wasn't", 'didn', 'having', 'both', 'wasn', 'them', "she's", 'himself', "needn't", "don't", 'won', 'ours', 'herself', 'doing', 'y', 'doesn', "that'll", "should've", 'o', 'couldn', 've', "mustn't", 'shan', 'does', 'itself', 'yourselves', 'than', 'too', 'were', 'as', 'she', 'those', 'but', 'hadn', 'had', "shan't", 'isn', 'into', "couldn't", 'weren', 'these', "shouldn't", 'm', 'a', "you'd", 'hasn', "hadn't", 'was', 'whom', 'did', 're', 't', 'ma', 'it', 'has', "wouldn't", 'hers', 'at', "won't", "doesn't", 'be', "haven't", 'am', 'are', 'don', "hasn't", 's', "aren't", 'theirs', 'ourselves', 'mustn', "isn't", 'an']
-    elif sw_level == 1:
-        stop_words = ['yourself', 'only', 'i', "you've", 'him', 'during', "didn't", 'shouldn', 'what', 'me', 'yours', 'further', 'aren', 'is', 'above', 'we', 'haven', 'can', 'its', 'themselves', "mightn't", 'his', 'ain', 'and', 'not', 'wouldn', 'off', 'our', 'of', "you'll", 'from', 'their', 'being', "it's", 'myself', 'after', 'mightn', 'with', "weren't", 'will', 'now', 'll', 'such', "you're", 'where', 'over', 'very', 'needn', 'no', 'd', 'her', 'here', 'the', "wasn't", 'some', 'didn', 'then', 'having', 'both', 'each', 'wasn', 'there', 'when', 'before', 'them', 'why', "she's", 'himself', "needn't", 'your', 'other', "don't", 'any', 'won', 'ours', 'against', 'herself', 'doing', 'once', 'y', 'few', 'doesn', 'do', "that'll", 'in', "should've", 'o', 'couldn', 've', 'so', "mustn't", 'shan', 'does', 'by', 'itself', 'own', 'most', 'or', 'yourselves', 'up', 'than', 'again', 'too', 'below', 'between', 'were', 'down', 'nor', 'he', 'as', 'she', 'out', 'how', 'those', 'but', 'hadn', 'should', 'been', 'had', "shan't", 'isn', 'into', 'about', "couldn't", 'weren', 'who', 'under', 'these', "shouldn't", 'my', 'm', 'you', 'a', 'to', 'through', 'more', "you'd", 'hasn', 'just', "hadn't", 'was', 'whom', 'all', 'for', 'that', 'have', 'until', 'did', 're', 't', 'same', 'ma', 'it', 'has', "wouldn't", 'hers', 'at', "won't", 'this', 'if', "doesn't", 'while', 'they', 'be', "haven't", 'am', 'are', 'don', "hasn't", 's', "aren't", 'which', 'theirs', 'on', 'because', 'ourselves', 'mustn', "isn't", 'an']
-
-    if drop_stopwords:
-        filtered_words = [word for word in words if word not in stop_words]
-    else:
-        filtered_words = words
-            
-    if len(filtered_words) == 0:
-        num_words_to_keep = len(words)
-        selected_words = random.sample(words, num_words_to_keep)
-    else:
-        if shuffle:
-            num_words_to_keep = math.ceil(len(filtered_words) * pct)
-            selected_words = random.sample(filtered_words, num_words_to_keep)
-        else:
-            randIndex = random.sample(range(len(filtered_words)), math.ceil(len(filtered_words) * pct))
-            randIndex.sort()
-            selected_words = [filtered_words[i] for i in randIndex]
-    
-    
-    if replace and pl_dist is not None and len(filtered_words) > 0:
-        if len(filtered_words) - num_words_to_keep > 0:
-            sampled_pls = sample_pls(pl_dist, len(filtered_words) - num_words_to_keep)
-            selected_words.extend(sampled_pls)
-    
-    return selected_words
 
 
 def sample_sub_prev(sentence, pct=0.5, shuffle=False):
@@ -235,27 +157,9 @@ def cleanup_sub(sent):
     if sent[-1] == " ":
         sent = sent[:-1]
     sent = re.sub(r'\s+',' ', sent)
-    
-    # sent = sent.lower()
-    # sent = fix_contractions(sent)
-    # sent = remove_punctuation(sent)
 
     return sent
 
-
-def process_cslr2_pls(labels, probs, inv_vocab):
-    
-    nl = labels[:,0].tolist()
-    np = probs[:,0].tolist()
-    
-    indices = list(range(len(nl)))
-
-    target_labels = torch.tensor(nl)
-    target_indices = torch.tensor(indices)
-
-    pl = list(itemgetter(*nl)(inv_vocab))
-
-    return pl, np, target_labels, target_indices
 
 def get_unique_bg_words(bg_words, drop_sw = False):
 
@@ -275,3 +179,22 @@ def remove_words(text, max_p=0.5):
     max_remove = random.randint(0, int(max_p * len(text)))
     keep_idx = sorted(random.sample(range(len(text)), len(text) - max_remove))
     return ' '.join([text[i] for i in keep_idx])
+
+
+def compress_and_average(strings, numbers):
+    # Step 2: Create a dictionary to collect numbers associated with each string
+    if len(strings) == 0:
+        return [], []
+
+    data = defaultdict(list)
+    for string, number in zip(strings, numbers):
+        data[string].append(number)
+    
+    # Step 3: Calculate the average for each string
+    averages = {key: sum(values) / len(values) for key, values in data.items()}
+    
+    # Convert the dictionary to two lists
+    compressed_strings = list(averages.keys())
+    compressed_averages = list(averages.values())
+    
+    return compressed_strings, compressed_averages
