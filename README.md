@@ -76,8 +76,8 @@ The directory structure of new project looks like this:
 
 ```bash
 # clone project
-git clone https://github.com/art-jang/vgg_slt.git
-cd vgg_slt
+git clone https://github.com/Haran71/vgg_slt_pre_release.git
+cd vgg_slt_pre_release
 
 # [OPTIONAL] create conda environment
 conda create -n myenv python=3.10
@@ -88,6 +88,7 @@ conda activate myenv
 
 # install requirements
 pip install -r requirements.txt
+conda install bioconda::java-jdk
 ```
 
 <br>
@@ -95,5 +96,5 @@ pip install -r requirements.txt
 ## ⚡  Your Superpowers
 
 ```bash
-python src/train.py trainer=ddp trainer.devices=[0,1,2,3,4,5,6,7] task_name=vgg_slt data=bobsl data.batch_size=16 data.num_workers=16 model.net.language_decoder_config.freeze_decoder=True
+python src/train.py trainer=ddp trainer.devices=[0,1,2,3] task_name=vgg_slt data=bobsl data.batch_size=8 data.num_workers=16
 ```

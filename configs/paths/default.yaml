@@ -31,16 +31,16 @@ misaligned_csv_root: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/
 heuristic_aligned_csv_root: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/cslr/with_timings_extended_boundaries_fix_alignment_21.12.23/
 llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B
 lm_root: ../cslr2/t5_checkpoint/
-question_pool: ./data/question_pool.txt
-cslr2_ckpt: model_best.pth
+question_pool: /home/jyj/Workspace/VGG/vgg_slt/data/question_pool.txt
+cslr2_ckpt: /home/jyj/Workspace/VGG/vgg_slt/model_best.pth
 bleurt_path: lucadiliello/BLEURT-20
 pl_dist_path: null #./add_files/pl_dist.pkl
-blip_cap_path: ./add_files/blip2_captions_v2.pkl
-val_episode_ind_path: ./add_files/man_val_final_start_indices.json
-test_episode_ind_path: ./add_files/man_test_final_start_indices.json
+blip_cap_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/blip2_captions_v2.pkl
+val_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_val_final_start_indices.json
+test_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_test_final_start_indices.json
 man_gloss_path: null #../cslr2_t/bobsl/manual_gloss/dense_annotations.06.09.24/
-train_sent_ret_path: ./add_files/train_sent_ret.pkl
-val_sent_ret_path: ./add_files/val_sent_ret.pkl
+train_sent_ret_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/train_sent_ret.pkl
+val_sent_ret_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/val_sent_ret.pkl
 lip_feats_path: ../cslr2_t/bobsl/lip_feats/lip_dict.pkl
 train_cap_path: null
 spottings_path: null

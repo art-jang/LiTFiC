@@ -146,7 +146,6 @@ class LanguageDecoder(nn.Module):
 
         
             if questions is not None:
-              
                 if final_q is not None:
                     cur_embed = torch.cat([cur_q_embed, cur_v_embed, cur_final_q_embed, cur_s_embed], dim=0)
                     cur_label = cur_label = torch.cat([torch.LongTensor([ignore_idx]*(len(cur_q)+len(cur_v_embed)+len(cur_final_q_embed))).to(device), cur_s], dim=0)

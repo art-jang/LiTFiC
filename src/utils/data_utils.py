@@ -5,15 +5,15 @@ import string
 import torch
 from operator import itemgetter
 import string
-import contractions
+# import contractions
 import re
 from collections import defaultdict
 
 from bisect import bisect_left, bisect_right
 
-def fix_contractions(text):
-    fixed_text = contractions.fix(text)   
-    return fixed_text
+# def fix_contractions(text):
+#     fixed_text = contractions.fix(text)   
+#     return fixed_text
 
 def remove_punctuation(text):
     punctuation_pattern = r'[^\w\s]'  # Matches any character that is not a word character or whitespace
