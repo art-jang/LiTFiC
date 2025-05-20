@@ -63,8 +63,13 @@ You can use the BLEURT-20 model from Hugging Face to automatically compute evalu
 | ------------------------ | -------------------------------------------------------------------------------- |
 | `bleurt_path`         | lucadiliello/BLEURT-20 (will automatically download this model) |
 
-blip_cap_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/blip2_captions_v2.pkl
-val_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_val_final_start_indices.json
-test_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_test_final_start_indices.json
-train_cap_path: null
-spottings_path: null
+
+## 🧪 Step 5: Download Additional Resources (Custom Captions & Split Info)
+
+### 📂 Files to be released:
+
+- `blip_cap_path`: BLIP2-based image captions (`blip2_captions_v2.pkl`)
+- `val_episode_ind_path`: Start indices of manually segmented validation episodes (`man_val_final_start_indices.json`)
+- `test_episode_ind_path`: Start indices of manually segmented test episodes (`man_test_final_start_indices.json`)
+- `train_cap_path`: Training previous captions
+- `spottings_path`: Spottings annotations
