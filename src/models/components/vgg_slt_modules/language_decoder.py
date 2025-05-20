@@ -1,11 +1,9 @@
-import os
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import ipdb
-from peft import LoraConfig, get_peft_model
 import random
 
+from peft import LoraConfig, get_peft_model
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from src.utils.data_utils import get_unique_bg_words, drop_words
 
 
@@ -88,6 +86,8 @@ class LanguageDecoder(nn.Module):
 
         self.use_spottings = use_spottings
         self.mix_in_spottings = mix_in_spottings
+        
+        assert (self.use_gt_prev and self.use_rec_prev) == False, "use_gt_prev and use_rec_prev cannot be used together. Please set one of them to False."
 
     def _tokenize(self, text, device='cpu'):
         input_ids = self.tokenizer(text, return_tensors='pt')['input_ids'][0].to(device)
@@ -95,12 +95,12 @@ class LanguageDecoder(nn.Module):
             input_ids = torch.cat([input_ids, torch.LongTensor([self.tokenizer.eos_token_id]).to(device)], dim=0)
         return input_ids
     
-    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs=None, background_description=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
+    def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, background_description=None, spottings=None):
 
         final_q = None
 
         # Initial prompt setup for questions
-        questions = ['You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.' for _ in questions]
+        # questions = ['You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.' for _ in questions]
         
         # Add previous contexts if applicable
         if previous_contexts is not None and self.use_rec_prev and (random.random() <= self.mix_in_prev_prob or not self.training):
@@ -191,12 +191,12 @@ class LanguageDecoder(nn.Module):
         
         return inputs_embeds[:, :-1], attn_masks[:, :-1], labels[:, 1:], position_ids
     
-    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, sub_gt=None, probs = None, background_description = None, rec_prev=None, rec_prev_conf=None, man_gloss=None, ret_sent=None, lip_feats=None, lip_masks=None, prev_pls=None, prev_pls_probs=None, spottings=None):
+    def _process_predict(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', pls=None, background_description = None, rec_prev=None, spottings=None):
 
         final_q = None
 
         # Handling rec_prev if applicable
-        if self.use_rec_prev and not self.sub_sub and not self.use_gt_prev:
+        if self.use_rec_prev and not self.use_gt_prev:
             if len(rec_prev) > 0:
                 rec_prev = [". ".join(r) + "." if len(r) > 0 else '' for r in rec_prev]
                 previous_contexts = rec_prev
@@ -302,4 +302,3 @@ class LanguageDecoder(nn.Module):
         outputs = self.decoder.generate(inputs_embeds=inputs_embeds, attention_mask=attn_masks, max_new_tokens=50, pad_token_id=self.tokenizer.eos_token_id, return_dict_in_generate=True, output_scores=True)
         
         return outputs['sequences']
-    

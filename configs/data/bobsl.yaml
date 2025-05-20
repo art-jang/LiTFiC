@@ -20,8 +20,6 @@ dataset_config:
   temporal_pad: 1.0
   info_pkl: ${paths.info_pkl}
   max_previous_sentences: 0
-  question_pool: ${paths.question_pool}
-  # question_pool: null
   filter_stop_words: False
   subtitles_random_offset: 0.5
   fps: 25
@@ -52,10 +50,6 @@ dataset_config:
   pl_synonym_grouping: True
   synonyms_pkl: ${paths.synonyms_pkl}
   vocab_pkl: ${paths.vocab_pkl}
-
-  # parameters to load word embeddings
-  load_word_embds: False
-  word_embds_pkl: ${paths.word_embds_pkl}
 
   # other parameters
   verbose: True

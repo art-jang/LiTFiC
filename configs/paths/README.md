@@ -1,21 +1,16 @@
-# path to root directory
-# this requires PROJECT_ROOT environment variable to exist
-# you can replace it with "." if you want the root to be the current working directory
-root_dir: ${oc.env:PROJECT_ROOT}
+# 📘 BOBSL Dataset Setup Guide
 
-# path to data directory
-data_dir: ${paths.root_dir}/data/
+This README describes how to obtain and prepare all necessary files for using the **BOBSL** dataset for Sign Language Translation (SLT).
 
-# path to logging directory
-log_dir: ${paths.root_dir}/logs/
+---
 
-# path to output directory, created dynamically by hydra
-# path generation pattern is specified in `configs/hydra/default.yaml`
-# use it to store all files generated during the run, like ckpts and metrics
-output_dir: ${hydra:runtime.output_dir}
+## 📦 Step 1: Download CSLR Annotations for BOBSL
 
-# path to working directory
-work_dir: ${hydra:runtime.cwd}
+Please download the **CSLR annotations for BOBSL** (approx. 1.9GB) from the official CSLR2 project page:
+
+🔗 [https://gulvarol.github.io/cslr2/data.html](https://gulvarol.github.io/cslr2/data.html)
+
+
 
 subset2episode: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/splits/subset2episode.json #
 vocab_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/vocab/8697_vocab.pkl

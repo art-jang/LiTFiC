@@ -9,7 +9,7 @@ optimizer:
 scheduler:
   _target_: pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR
   _partial_: true
-  warmup_epochs: 1
+  warmup_epochs: 5
   max_epochs: ${trainer.max_epochs}
   warmup_start_lr: 0
 
@@ -58,14 +58,13 @@ net:
     tokenizer_config:
       padding_side: left
       trust_remote_code: True
-      use_fast: False
+      use_fast: True
       add_eos_token: True
     decoder_config:
       trust_remote_code: True
       attn_implementation: flash_attention_2
 # compile model for faster training with pytorch 2.0
 compile: false
-frames_path: ${paths.rgb_frames}
 output_dir: ${paths.output_dir}
 bleurt_path: ${paths.bleurt_path}
 context_len: 1

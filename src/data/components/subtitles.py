@@ -1,23 +1,16 @@
 """
 Generic dataset to load subtitles from data files
 """
+import re
+import math
 import json
+import torch
 import random
 import pickle
 import numpy as np
 from typing import Optional
 from torch.utils.data import Dataset
-import math
 from src.utils.data_utils import unique_ordered_list, sample_sub_prev
-
-from einops import rearrange
-from operator import itemgetter
-
-import os
-import random
-import re
-import torch
-from tqdm import tqdm
 
 
 class Subtitles(Dataset):
@@ -33,7 +26,6 @@ class Subtitles(Dataset):
         temporal_pad: float,
         info_pkl: str,
         max_previous_sentences: int = 0,
-        question_pool: Optional[str] = None,
         filter_stop_words: bool = False,
         subtitles_random_offset: Optional[float] = None,
         text_augmentations: Optional[object] = None,
@@ -167,7 +159,7 @@ class Subtitles(Dataset):
             self.train_cap_prob = train_cap_prob
         else:
             self.train_cap = None
-            self.train_cap_prob = None
+            self.train_cap_prob = 0.0
 
         self.synonyms_dict = pickle.load(open(synonyms_pkl, "rb"))
 
@@ -205,11 +197,6 @@ class Subtitles(Dataset):
                 'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
             }  # removed 'what', 'why' and 'because'
         self.max_previous_sentences = max_previous_sentences
-        if question_pool is not None:
-            with open(question_pool, "r") as f:
-                self.question_pool = [line.strip() for line in f.readlines()]
-        else:
-            self.question_pool = None
         
         
     def fix_synonyms_dict(self) -> None:
@@ -387,15 +374,7 @@ class Subtitles(Dataset):
             if previous_context is None:
                 previous_context = ""
         
-       
-        
-        question = None
-        if self.question_pool is not None:
-            if self.setname == "train":
-                question = random.choice(self.question_pool)
-            else:
-                question = self.question_pool[0]
-        
+        question = 'You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.'
         start_second = math.floor(sub_starts)
         end_second = math.ceil(sub_ends)
 

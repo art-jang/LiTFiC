@@ -4,45 +4,36 @@
 # python train.py experiment=example
 
 defaults:
-  - override /data: how2sign
+  - override /data: bobsl
   - override /model: vgg_slt
   - override /callbacks: default
   - override /trainer: ddp
-  - override /paths: how2sign
 
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["vgg_slt", "llama3"]
+tags: ["vgg_slt", "vid+pg+prev+bg"]
 
 seed: 12345
 
-# paths:
-#   llm_root: ../hf/Llama-3.2-3B
-
 trainer:
-  min_epochs: 100
-  max_epochs: 100
+  min_epochs: 10
+  max_epochs: 10
   gradient_clip_val: 1.0
-  devices: [0]
+  devices: [0,1,2,3]
 
 data:
-  batch_size: 4
+  batch_size: 2
   num_workers: 8
   dataset_config:
-    feats_lmdb_stride: 1
-
+    max_previous_sentences: 1
+    aug_prev: True
 
 model:
-  scheduler:
-    warmup_epochs: 5
   net:
-    mm_projector_config:
-      hidden_size: 4096
-      mm_hidden_size: 768
-      projector_type: conv_K5_P2_KP2_L2
     llm_config:
-      tokenizer_config:
-        padding_side: left
-        use_fast: True
-
+      use_pl_w_feats: True
+      use_rec_prev: True
+      use_bg_words: True
+      drop_bg_sw: True
+      bg_desc: True

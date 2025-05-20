@@ -12,7 +12,7 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["vgg_slt", "llama3"]
+tags: ["vgg_slt", "vid+pg+prev"]
 
 seed: 12345
 
@@ -23,21 +23,14 @@ trainer:
   devices: [0,1,2,3]
 
 data:
-  batch_size: 4
-  num_workers: 32
-
-paths:
-  # llm_root: ../hf/Meta-Llama-3-8B
-  llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B
+  batch_size: 2
+  num_workers: 8
+  dataset_config:
+    max_previous_sentences: 1
+    aug_prev: True
 
 model:
   net:
-    mm_projector_config:
-      hidden_size: 4096
-      cslr2_options:
-        ckpt_path: ../cslr2/model_best.pth
     llm_config:
-      tokenizer_config:
-        padding_side: right
-        use_fast: True
-
+      use_pl_w_feats: True
+      use_rec_prev: True

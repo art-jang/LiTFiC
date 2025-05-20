@@ -66,7 +66,6 @@ class SLTLitModule(LightningModule):
         scheduler: torch.optim.lr_scheduler,
         scheduler_options: dict,
         compile: bool,
-        frames_path: str,
         output_dir: str,
         bleurt_path: str,
         context_len: int,

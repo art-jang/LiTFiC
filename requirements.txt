@@ -1,6 +1,6 @@
 # --------- pytorch --------- #
-torch==2.3.1
-torchvision==0.18.1
+# torch==2.3.1
+# torchvision==0.18.1
 lightning==2.3.0
 torchmetrics>=0.11.4
 
@@ -33,7 +33,6 @@ pycocoevalcap==1.2
 numpy==1.26.1
 tensorboard==2.17.0
 sentencepiece==0.2.0
-ipdb
 opencv-python==4.10.0.84
 peft==0.12.0
 debugpy==1.8.5

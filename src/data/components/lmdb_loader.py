@@ -43,7 +43,6 @@ class LMDBLoader(object):
         assert load_type in ["feats", "frames", "pseudo-labels"], \
             f"load_type must be either 'feats' or 'frames' or 'pseudo-labels', but got {load_type}."
         
-        # ipdb.set_trace()
         self.lmdb_path = lmdb_path
         self.load_stride = load_stride
         self.load_float16 = load_float16

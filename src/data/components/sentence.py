@@ -4,6 +4,7 @@ Refactored from sentence_features.py
 """
 import torch
 import pickle
+import random
 import numpy as np
 
 from einops import rearrange
@@ -14,8 +15,6 @@ from torch.utils.data import Dataset
 from src.data.components.subtitles import Subtitles
 from src.data.components.lmdb_loader import LMDBLoader
 from src.utils.data_utils import cleanup_sub, get_annotations_in_time_range, remove_words, compress_and_average
-import os
-import random
 
 class Sentences(Dataset):
     """General dataset class to load sentences from data files"""
@@ -30,7 +29,6 @@ class Sentences(Dataset):
         temporal_pad: float,
         info_pkl: str,
         max_previous_sentences: int = 0,
-        question_pool: Optional[str] = None,
         filter_stop_words: bool = False,
         subtitles_random_offset: Optional[float] = None,
         text_augmentations: Optional[object] = None,
@@ -132,7 +130,6 @@ class Sentences(Dataset):
             temporal_pad=temporal_pad,
             info_pkl=info_pkl,
             max_previous_sentences=max_previous_sentences,
-            question_pool=question_pool,
             filter_stop_words=filter_stop_words,
             subtitles_random_offset=subtitles_random_offset,
             text_augmentations=text_augmentations,
@@ -280,13 +277,7 @@ class Sentences(Dataset):
         previous_context: Optional[str] = None,
         question: Optional[str] = None,
         bg_description: Optional[str] = None,
-        # man_gloss: Optional[str] = None,
-        # cslr2_labels = None,
-        # cslr2_probs = None,
-        # ret_sent = None,
         id = None,
-        # prev_start = None,
-        # prev_end = None,
     ) -> dict:
         """Loads single item based on subtitle and video name"""
         if self.skip_mode.value:
@@ -467,14 +458,7 @@ class Sentences(Dataset):
             "previous_context": previous_context,
             "question": question,
             "pls": pls if self.pseudo_label is not None else None,
-            # "sub_gt": sample_sub(subtitle, self.sub_sample_shuffle, self.sub_sample_pct, self.sub_sample_replace, self.pl_dist, self.drop_stopwords, self.sw_level),
-            # "probs": probs_cp if self.pseudo_label is not None else None,
             "bg_description": bg_description,
-            # "man_gloss": man_gloss,
-            # "ret_sent": ret_sent,
-            # "lip_feats": lip_feats,
-            # "prev_pls": prev_pls,
-            # "prev_pls_probs": prev_pls_probs,
             "id": id,
             "spottings": spottings
         }
