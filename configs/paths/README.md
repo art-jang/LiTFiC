@@ -55,10 +55,16 @@ Scroll to the **"Video Features"** section on the website, and download:
 | `annotations_pkl`         | {Automatic Annotations directory}                                               |
 | `vid_features_lmdb`         | {Video Features directory}                                               |
 
+## 📊 Step 4: Download BLEURT Model for Evaluation
 
-bleurt_path: lucadiliello/BLEURT-20
-annotations_pkl: /bobsl/lmdbs/lmdb-pl_vswin_t-bs256_float16/
-vid_features_lmdb: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
+BLEURT is a learned evaluation metric used to assess the quality of generated text.
+
+You can use the BLEURT-20 model from Hugging Face to automatically compute evaluation scores (No manual download is required).
+
+| Variable                 | Path                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `bleurt_path`         | lucadiliello/BLEURT-20 (will automatically download this model) |
+
 blip_cap_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/blip2_captions_v2.pkl
 val_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_val_final_start_indices.json
 test_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_test_final_start_indices.json
