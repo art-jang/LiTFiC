@@ -79,3 +79,14 @@ python src/eval.py trainer.devices=[0,1,2,3] \
   experiment=vid+pg+prev+bg \
   ckpt_path={CKPT_PATH}
 ```
+
+## Acknowledgements
+
+This repository is built upon the excellent [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template),  
+which provided a solid foundation for organizing training and configuration workflows.
+
+We also adapted parts of our data loading pipeline from [CSLR2](https://github.com/gulvarol/cslr2),  
+which was instrumental in handling the BOBSL dataset efficiently.
+
+We would like to thank the authors of these projects for their contributions to the community.
+
