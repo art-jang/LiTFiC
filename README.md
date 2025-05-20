@@ -31,8 +31,6 @@ pip install -r requirements.txt
 conda install bioconda::java-jdk
 ```
 
-<br>
-
 ## ⚡  Your Superpowers
 
 ```bash
