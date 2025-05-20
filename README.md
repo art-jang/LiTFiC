@@ -1,14 +1,18 @@
 <div align="center">
 
-# Lost in Translation, Found in Context:<br> Sign Language Translation with Contextual Cues
+# Lost in Translation, Found in Context:<br> Sign Language Translation with Contextual Cues (CVPR 2025)
 
 ---
 
 ### 🔥 **Official Code Repository and Usage Instructions**
 
-</div>
+## 📄 Paper & Project Links
 
-# Lost in Translation, Found in Context: Sign Language Translation with Contextual Cues
+- **[📘 Paper (arXiv)](https://arxiv.org/abs/2501.09754)**  
+  Official research paper for *Lost in Translation, Found in Context*.
+
+- **[🌐 Project Page (VGG)](https://www.robots.ox.ac.uk/~vgg/research/litfic/)**  
+  Detailed project webpage with demos, code, and additional resources.
 
 </div>
 
