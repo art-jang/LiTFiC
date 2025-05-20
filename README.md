@@ -42,8 +42,28 @@ You can find the full explanation and configuration details here:
 This guide covers all necessary datasets, including annotations, video features, subtitles, and more.
 
 
-## ⚡  Your Superpowers
+## Training with Different Modalities (Bash Commands)
+
+Use the following commands to train the model with different modality combinations.  
+Specify which GPUs to use with the `trainer.devices` option.
 
 ```bash
-python src/train.py trainer=ddp trainer.devices=[0,1,2,3] task_name=vgg_slt data=bobsl data.batch_size=8 data.num_workers=16
+# 1) Train using only the video (vid) modality
+python src/train.py trainer.devices=[0,1,2,3] task_name=vid experiment=vid
+
+# 2) Train using video + pseudo-gloss captions (pg) modality
+python src/train.py trainer.devices=[0,1,2,3] task_name=vid+pg experiment=vid+pg
+
+# 3) Train using video + pseudo-gloss + previous sentence (prev) modality
+python src/train.py trainer.devices=[0,1,2,3] task_name=vid+pg+prev experiment=vid+pg+prev
+
+# 4) Train using video + pseudo-gloss + previous sentence + background (bg) modality
+python src/train.py trainer.devices=[0,1,2,3] task_name=vid+pg+prev+bg experiment=vid+pg+prev+bg
+
+### Viewing Training Logs
+If you want to track and visualize training logs using Weights & Biases (W&B),  
+add the option `logger=wandb` to your training command. For example:
+
+```bash
+python src/train.py trainer.devices=[0,1,2,3] task_name=vid experiment=vid logger=wandb
 ```
