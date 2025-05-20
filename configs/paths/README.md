@@ -22,7 +22,7 @@ Please download the **CSLR annotations for BOBSL** (approx. 1.9GB) from the offi
 
 ## 🦙 Step 2: Download LLaMA 3 (8B) Model
 
-To use the LLaMA-based language model for generation or evaluation, download the **Meta-LLaMA-3-8B** model from Hugging Face:
+To use the LLaMA-based language model, download the **Meta-LLaMA-3-8B** model from Hugging Face:
 
 🔗 [https://huggingface.co/meta-llama/Meta-Llama-3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B)
 
@@ -31,7 +31,31 @@ To use the LLaMA-based language model for generation or evaluation, download the
 | `llm_root`         | {Meta-Llama-8-8B directory}                                               |
 
 
-llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B
+## 🗂 Step 3: Download Annotations and Video Features (LMDB)
+
+Download both from the official BOBSL dataset page hosted by the VGG group.
+
+🔗 [https://www.robots.ox.ac.uk/~vgg/data/bobsl/#download](https://www.robots.ox.ac.uk/~vgg/data/bobsl/#download)
+
+---
+
+### 📥 3.1 `annotations_pkl` (Pseudo-labels)
+
+Scroll to the **"Automatic Annotations"** section on the website, and download:
+
+> **CONTINUOUS SIGN SEQUENCES - SWIN V2 FEATURES PSEUDO-LABELS → LMDB**
+
+Scroll to the **"Video Features"** section on the website, and download:
+
+> **SWIN FEATURES V2 → LMDB**
+
+
+| Variable                 | Path                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `annotations_pkl`         | {Automatic Annotations directory}                                               |
+| `vid_features_lmdb`         | {Video Features directory}                                               |
+
+
 bleurt_path: lucadiliello/BLEURT-20
 annotations_pkl: /bobsl/lmdbs/lmdb-pl_vswin_t-bs256_float16/
 vid_features_lmdb: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/lmdbs/lmdb-feats_vswin_t-bs256_float16/
