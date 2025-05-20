@@ -39,8 +39,6 @@ Download both from the official BOBSL dataset page hosted by the VGG group.
 
 ---
 
-### 📥 3.1 `annotations_pkl` (Pseudo-labels)
-
 Scroll to the **"Automatic Annotations"** section on the website, and download:
 
 > **CONTINUOUS SIGN SEQUENCES - SWIN V2 FEATURES PSEUDO-LABELS → LMDB**
