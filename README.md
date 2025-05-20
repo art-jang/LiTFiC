@@ -9,12 +9,9 @@
 
 ## 📄 Paper & Project Links
 
-- **[📘 Paper (arXiv)](https://arxiv.org/abs/2501.09754)**  
-  Official research paper for *Lost in Translation, Found in Context*.
+- **[📘 Paper (arXiv)](https://arxiv.org/abs/2501.09754)**: Official research paper for *Lost in Translation, Found in Context*.
 
-- **[🌐 Project Page (VGG)](https://www.robots.ox.ac.uk/~vgg/research/litfic/)**  
-  Detailed project webpage with demos, code, and additional resources.
-
+- **[🌐 Project Page](https://www.robots.ox.ac.uk/~vgg/research/litfic/)**: Detailed project webpage with demos, code, and additional resources.
 
 ## 🚀  Quickstart
 
