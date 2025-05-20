@@ -31,6 +31,17 @@ pip install -r requirements.txt
 conda install bioconda::java-jdk
 ```
 
+
+## 📥 Data Download for Training and Testing
+
+To train and test the model properly, please follow the detailed instructions on how to download and prepare the datasets.
+
+You can find the full explanation and configuration details here:  
+➡️ [Dataset Paths and Download Instructions](https://github.com/art-jang/Lost-in-Translation-Found-in-Context/tree/main/configs/paths)
+
+This guide covers all necessary datasets, including annotations, video features, subtitles, and more.
+
+
 ## ⚡  Your Superpowers
 
 ```bash
