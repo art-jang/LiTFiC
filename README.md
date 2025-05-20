@@ -1,6 +1,15 @@
 <div align="center">
 
-# VGG Sign Langauge Translation Project
+# Lost in Translation, Found in Context:  
+## Sign Language Translation with Contextual Cues
+
+---
+
+### 🔥 **Official Code Repository and Usage Instructions**
+
+</div>
+
+# Lost in Translation, Found in Context: Sign Language Translation with Contextual Cues
 
 </div>
 
