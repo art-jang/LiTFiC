@@ -5,6 +5,7 @@
 ---
 
 ### 🔥 **Official Code Repository and Usage Instructions**
+</div>
 
 ## 📄 Paper & Project Links
 
@@ -14,7 +15,6 @@
 - **[🌐 Project Page (VGG)](https://www.robots.ox.ac.uk/~vgg/research/litfic/)**  
   Detailed project webpage with demos, code, and additional resources.
 
-</div>
 
 ## 🚀  Quickstart
 
