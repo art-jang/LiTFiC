@@ -68,3 +68,14 @@ add the option `logger=wandb` to your training command. For example:
 ```bash
 python src/train.py trainer.devices=[0,1,2,3] task_name=vid experiment=vid logger=wandb
 ```
+
+## Evaluation
+
+To evaluate a trained model, run the following command:
+
+```bash
+python src/eval.py trainer.devices=[0,1,2,3] \
+  task_name=vid+pg+prev+bg-eval \
+  experiment=vid+pg+prev+bg \
+  ckpt_path={CKPT_PATH}
+```
