@@ -98,9 +98,6 @@ class LanguageDecoder(nn.Module):
     def _process(self, x, video_masks, subtitles, questions=None, previous_contexts=None, device='cpu', ignore_idx=-100, pls=None, background_description=None, spottings=None):
 
         final_q = None
-
-        # Initial prompt setup for questions
-        # questions = ['You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.' for _ in questions]
         
         # Add previous contexts if applicable
         if previous_contexts is not None and self.use_rec_prev and (random.random() <= self.mix_in_prev_prob or not self.training):
@@ -202,10 +199,6 @@ class LanguageDecoder(nn.Module):
                 previous_contexts = rec_prev
             else:
                 previous_contexts = ['' for _ in range(len(subtitles))]
-
-        # Initial prompt setup for questions
-        questions = ['You are an AI assistant designed to interpret a video of a sign language signing sequence and translate it into English.' for _ in questions]
-
         
         # Add previous contexts if applicable
         if previous_contexts is not None and self.use_rec_prev:
