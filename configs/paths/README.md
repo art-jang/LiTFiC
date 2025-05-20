@@ -20,15 +20,15 @@ Please download the **CSLR annotations for BOBSL** (approx. 1.9GB) from the offi
 | `aligned_subtitles_path` | `bobsl/subtitles_pkl/manually-aligned.pkl`                                       |
 | `synonyms_pkl`           | `bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl`                |
 
+## 🦙 Step 2: Download LLaMA 3 (8B) Model
 
-subset2episode: bobsl/splits/subset2episode.json #
-vocab_pkl: bobsl/vocab/8697_vocab.pkl
-info_pkl: bobsl/cslr_annotation/bobsl/unannotated-info/info-src_videos_2236.pkl
-subtitles_path: bobsl/subtitles_pkl/best_delta_postpro_bobsl_best_traineval_0_pslab_ftune_.pkl
-aligned_subtitles_path: bobsl/subtitles_pkl/manually-aligned.pkl
-synonyms_pkl: bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
+To use the LLaMA-based language model for generation or evaluation, download the **Meta-LLaMA-3-8B** model from Hugging Face:
 
+🔗 [https://huggingface.co/meta-llama/Meta-Llama-3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B)
 
+| Variable                 | Path                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `llm_root`         | {Meta-Llama-8-8B directory}                                               |
 
 
 llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B
