@@ -59,6 +59,7 @@ python src/train.py trainer.devices=[0,1,2,3] task_name=vid+pg+prev experiment=v
 
 # 4) Train using video + pseudo-gloss + previous sentence + background (bg) modality
 python src/train.py trainer.devices=[0,1,2,3] task_name=vid+pg+prev+bg experiment=vid+pg+prev+bg
+```
 
 ### Viewing Training Logs
 If you want to track and visualize training logs using Weights & Biases (W&B),  
