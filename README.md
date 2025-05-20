@@ -1,6 +1,6 @@
 <div align="center">
 
-# Lost in Translation, Found in Context: Sign Language Translation with Contextual Cues
+# Lost in Translation, Found in Context:<br> Sign Language Translation with Contextual Cues
 
 ---
 
