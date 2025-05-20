@@ -1,9 +1,7 @@
 <div align="center">
 
-# Lost in Translation, Found in Context:<br> Sign Language Translation with Contextual Cues (CVPR 2025)
-
+# Lost in Translation, Found in Context:<br>Sign Language Translation with Contextual Cues<br>(CVPR 2025)
 ---
-
 ### 🔥 **Official Code Repository and Usage Instructions**
 </div>
 
@@ -13,11 +11,11 @@
 
 - **[🌐 Project Page](https://www.robots.ox.ac.uk/~vgg/research/litfic/)**: Detailed project webpage with demos, code, and additional resources.
 
-## 🚀  Quickstart
+## 🚀  Environment
 
 ```bash
 # clone project
-git clone https://github.com/Haran71/vgg_slt_pre_release.git
+git clone https://github.com/art-jang/Lost-in-Translation-Found-in-Context.git
 cd vgg_slt_pre_release
 
 conda create -n myenv python=3.10
