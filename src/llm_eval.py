@@ -1,51 +1,23 @@
 import os
-import ast
-import json
 import argparse
+import json
+import ast
 import numpy as np
 from tqdm import tqdm
-from openai import OpenAI  # Ensure you have the correct OpenAI import
-import concurrent.futures
 
-# Set environment variables
-os.environ['HF_HOME'] = '/scratch/shared/beegfs/haran/cache/'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-os.environ["OPENAI_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = "put your openai key here"
 
-def parse_arguments():
-    """
-    Parse command-line arguments.
-    """
-    parser = argparse.ArgumentParser(description='Process data file path.')
-    parser.add_argument('data_file', type=str, help='Path to the data JSON file')
-    parser.add_argument('--max_threads', type=int, default=10, help='Maximum number of threads to use')
-    return parser.parse_args()
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Process data file path.')
+parser.add_argument('--data_file', type=str, help='Path to the data JSON file')
+args = parser.parse_args()
 
-def load_data(file_path):
-    """
-    Load JSON data from the provided file path.
-    """
-    with open(file_path, "r") as f:
-        data = json.load(f)
-    return data
+# Load data from the provided file path
+with open(args.data_file, "r") as f:
+    data = json.load(f)
 
-def initialize_openai_client():
-    """
-    Initialize and return an OpenAI client instance.
-    """
-    return OpenAI()
-
-def eval_each(text_gt, text_pred, client):
-    """
-    Evaluate the alignment between ground truth and predicted text using OpenAI's API.
-
-    Parameters:
-    - text_gt (str): Ground truth sentence.
-    - text_pred (str): Predicted sentence.
-
-    Returns:
-    - dict: A dictionary containing 'score' and 'reason'.
-    """
+def eval_each(text_gt, text_pred):
     sys_prompt = (
         "Evaluate how well the candidate sentence aligns with the content and meaning of the reference sentence on a scale of 0 to 5. "
         "Prioritize key nouns and verbs, while giving less importance to subject, pronouns, adjectives, and adverbs.\n\n"
@@ -137,7 +109,7 @@ def eval_each(text_gt, text_pred, client):
         {"role": "system", "content": sys_prompt},
     ]
 
-    # Add hardcoded examples to the messages
+    # For each example, add a 'user' message and an 'assistant' message
     for example in examples:
         example_prompt = (
             "Assign a score from 0 to 5 based on the rules provided. "
@@ -152,7 +124,7 @@ def eval_each(text_gt, text_pred, client):
         messages.append({"role": "user", "content": example_prompt})
         messages.append({"role": "assistant", "content": example_output})
 
-    # Add the actual input to the messages
+    # Now, add the actual input
     prompt = (
         "Assign a score from 0 to 5 based on the rules provided. "
         "Provide your answer in JSON format with keys \"score\" (0-5) and \"reason\" with a brief explanation.\n\n"
@@ -163,96 +135,50 @@ def eval_each(text_gt, text_pred, client):
     )
     messages.append({"role": "user", "content": prompt})
 
-    try:
-        # Generate the model output
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-        )
-        response = completion.choices[0].message.content
+    # Generate the model output
+    from openai import OpenAI
+    
+    # Ensure your API key is set
+    client = OpenAI()
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+    )
 
-        # Parse the JSON response
-        parsed = response.split("{")[1]
-        parsed = "{" + parsed.split("}")[0] + "}"
-        d = ast.literal_eval(parsed)
-        return d
-    except Exception as e:
-        print(f"Error processing: GT='{text_gt}' | Pred='{text_pred}'")
-        print(f"Exception: {e}")
-        return None
+    return completion.choices[0].message.content
 
-def process_item(i, data, client):
-    """
-    Process a single item by evaluating its score.
+scores = []
+score_list = []
 
-    Parameters:
-    - i (int): Index of the item.
-    - data (dict): The data dictionary containing 'gt' and 'pred'.
-    - client (OpenAI): An instance of the OpenAI client.
-
-    Returns:
-    - tuple: (score, score_data) or (None, None) in case of error.
-    """
+for i in tqdm(range(len(data["gt"])), total=len(data["gt"])):
+# for i in tqdm(range(3), total=len(data["gt"])):
     text_gt = data["gt"][i]
     text_pred = data["pred"][i]
-    score_data = eval_each(text_gt, text_pred, client)
-    if score_data is None:
-        return None, None
-    score_data["gt"] = text_gt
-    score_data["pred"] = text_pred
-    score_data["index"] = i
-    return score_data["score"], score_data
+    import pdb; pdb.set_trace()
+    score_data= eval_each(text_gt, text_pred)
+    # score_data = json.loads(score_json)
+    parsed = score_data.split("{")[1]
+    parsed = "{" + parsed.split("}")[0] + "}"
+    # print(parsed)
+    # parsed.replace('<|eot_id|>', "")
+    # print(parsed)
+    try:
+        d = ast.literal_eval(parsed)
+    except:
+        print(parsed)
+        print("Error")
+        continue
+    scores.append(d["score"])
+    score_list.append(d)
 
-def main():
-    # Parse command-line arguments
-    args = parse_arguments()
+final_score_mean = np.mean(scores)
+final_score_std = np.std(scores)
 
-    # Load data
-    data = load_data(args.data_file)
+print(f"Mean score: {final_score_mean}")
+print(f"Standard deviation of scores: {final_score_std}")
 
-    # Initialize OpenAI client
-    client = initialize_openai_client()
-
-    scores = []
-    score_list = []
-
-    # Define the number of threads
-    max_threads = args.max_threads
-    print(f"Using up to {max_threads} threads for processing.")
-
-    # Use ThreadPoolExecutor for multithreading
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
-        # Create a partial function with fixed data and client
-        # Submit all tasks to the executor
-        futures = {
-            executor.submit(process_item, i, data, client): i for i in range(len(data["gt"]))
-        }
-
-        # Initialize tqdm progress bar
-        with tqdm(total=len(data["gt"]), desc="Processing", unit="item") as pbar:
-            for future in concurrent.futures.as_completed(futures):
-                i = futures[future]
-                result = future.result()
-                if result != (None, None):
-                    score, score_data = result
-                    scores.append(score)
-                    score_list.append(score_data)
-                # Update the progress bar
-                pbar.update(1)
-
-    # Compute final statistics
-    final_score_mean = np.mean(scores) if scores else 0
-    final_score_std = np.std(scores) if scores else 0
-
-    # Save the results to JSON files
-    base_filename = os.path.splitext(args.data_file)[0]
-    with open(f"{base_filename}_scores_2.json", "w") as f:
-        json.dump({"mean": final_score_mean, "std": final_score_std}, f, indent=4)
-    with open(f"{base_filename}_score_list_2.json", "w") as f:
-        json.dump(score_list, f, indent=4)
-
-    print(f"Processing complete. Mean Score: {final_score_mean}, Std Dev: {final_score_std}")
-    print(f"Results saved to '{base_filename}_scores.json' and '{base_filename}_score_list.json'.")
-
-if __name__ == "__main__":
-    main()
+# Save the results to a JSON file
+with open(args.data_file.split(".")[0]+ "_scores.json", "w") as f:
+    json.dump({"mean": final_score_mean, "std": final_score_std}, f)
+with open(args.data_file.split(".")[0]+ "_score_list.json", "w") as f:
+    json.dump(score_list, f)
