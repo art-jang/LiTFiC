@@ -38,4 +38,5 @@ peft==0.12.0
 debugpy==1.8.5
 bleurt_pytorch
 nltk
+openai
 # sh            # for running bash commands in some tests (linux/macos only)
