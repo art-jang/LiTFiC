@@ -80,6 +80,13 @@ python src/eval.py trainer.devices=[0,1,2,3] \
   ckpt_path={CKPT_PATH}
 ```
 
+For LLM evaluation, run the following command:
+
+```bash
+python src/llm_eval.py data_file={CAPTION_FILE}
+```
+
+
 ## Acknowledgements
 
 This repository is built upon the excellent [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template),  
