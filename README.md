@@ -98,8 +98,7 @@ which was instrumental in handling the BOBSL dataset efficiently.
 We would like to thank the authors of these projects for their contributions to the community.
 
 
-```markdown
-## 🙌 Please Cite Us
+# 🙌 Please Cite Us
 
 If you find our work useful for your research, please consider citing:
 
