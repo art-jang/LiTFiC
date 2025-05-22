@@ -83,7 +83,7 @@ python src/eval.py trainer.devices=[0,1,2,3] \
 For LLM evaluation, run the following command:
 
 ```bash
-python src/llm_eval.py data_file={CAPTION_FILE}
+python src/llm_eval.py --data_file={CAPTION_FILE}
 ```
 
 
