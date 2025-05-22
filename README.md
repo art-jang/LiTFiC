@@ -97,3 +97,16 @@ which was instrumental in handling the BOBSL dataset efficiently.
 
 We would like to thank the authors of these projects for their contributions to the community.
 
+
+```markdown
+## 🙌 Please Cite Us
+
+If you find our work useful for your research, please consider citing:
+
+```bibtex
+@article{jang2025lost,
+  title={Lost in Translation, Found in Context: Sign Language Translation with Contextual Cues},
+  author={Jang, Youngjoon and Raajesh, Haran and Momeni, Liliane and Varol, G{\"u}l and Zisserman, Andrew},
+  journal={arXiv preprint arXiv:2501.09754},
+  year={2025}
+}
