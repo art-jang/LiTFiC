@@ -42,7 +42,7 @@ You can find the full explanation and configuration details here:
 This guide covers all necessary datasets, including annotations, video features, subtitles, and more.
 
 
-## Training with Different Modalities (Bash Commands)
+## Training with Different Modalities
 
 Use the following commands to train the model with different modality combinations.  
 Specify which GPUs to use with the `trainer.devices` option.
