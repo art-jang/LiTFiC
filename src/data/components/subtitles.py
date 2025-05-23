@@ -349,11 +349,13 @@ class Subtitles(Dataset):
                 
                 if self.setname == "train":
                     if random.random() < self.train_cap_prob:
-                        prev_text = self.train_cap[str(idx - i - 1)]["pred"]
+                        try:
+                            prev_text = self.train_cap[str(idx - i - 1)]["pred"]
+                        except:
+                            prev_text = self.subtitles["subtitle"][idx - i - 1]
                     else:
                         prev_text = self.subtitles["subtitle"][idx - i - 1]
                     prev_text = sample_sub_prev(prev_text, pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
-
                 else:
                     prev_text = self.subtitles["subtitle"][idx - i - 1]
                 
