@@ -27,8 +27,8 @@ aligned_subtitles_path: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/su
 synonyms_pkl: /mnt/lynx2/datasets/bobsl/bobsl/cslr_annotation/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
 llm_root: /mnt/bear1/users/jyj/VGG/lamma3/Meta-Llama-3-8B
 bleurt_path: lucadiliello/BLEURT-20
-blip_cap_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/blip2_captions_v2.pkl
-val_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_val_final_start_indices.json
-test_episode_ind_path: /home/jyj/Workspace/VGG/vgg_slt/add_files/man_test_final_start_indices.json
-train_cap_path: null
+blip_cap_path: ./blip2_captions_v2.pkl
+val_episode_ind_path: ./val_start_indices.json
+test_episode_ind_path: ./test_start_indices.json
+train_cap_path: ./prev_gt_captions.json
 spottings_path: null

@@ -351,6 +351,7 @@ class Subtitles(Dataset):
                     if random.random() < self.train_cap_prob:
                         try:
                             prev_text = self.train_cap[str(idx - i - 1)]["pred"]
+                            import pdb; pdb.set_trace()
                         except:
                             prev_text = self.subtitles["subtitle"][idx - i - 1]
                     else:

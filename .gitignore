@@ -151,6 +151,8 @@ configs/local/default.yaml
 logs
 .env
 slurm_logs/
+*.pkl
+*.json
 
 # Aim logging
 .aim
