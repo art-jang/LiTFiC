@@ -84,7 +84,7 @@ def sample_pls(data, num_samples):
 def sample_sub_prev(sentence, pct=0.5, shuffle=False):
     words = sentence.split()
 
-    filtered_words = [word.strip(string.punctuation).lower() for word in words]  
+    filtered_words = [word.strip(string.punctuation) for word in words]
 
     pct = 1 - (random.random() * pct)
     

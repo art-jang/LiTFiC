@@ -353,10 +353,8 @@ class SLTLitModule(LightningModule):
         return concatenated
 
     def get_cap_metrics(self):
-        
         tensor_preds = strings_to_tensor(self.all_preds)
         tensor_gt = strings_to_tensor(self.all_gts)
-
 
         m_preds_tensor = self.gather_and_concatenate(tensor_preds)
         m_gt_tensor = self.gather_and_concatenate(tensor_gt)
@@ -402,7 +400,6 @@ class SLTLitModule(LightningModule):
             with open(f"{self.vis_dir}/{self.current_epoch}/cap.json", 'w') as f:
                 json.dump(cap_dict, f)
 
-
         return bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall
     
     def _eval(self) -> None:
@@ -435,7 +432,6 @@ class SLTLitModule(LightningModule):
                 tmp_dict['recall'] = recall[idx]
                 tmp_dict['blip_cap'] = self.blip_cap[idx]
                 tmp_dict['rec_prev'] = self.rec_prev[idx]
-            
 
                 if len(self.prev_context) > 0:
                     tmp_dict['prev_contexts'] = self.prev_context[idx] 
@@ -444,7 +440,6 @@ class SLTLitModule(LightningModule):
                 
             with open(f'{self.vis_dir}/{self.current_epoch}/info.json', 'w') as f:
                 json.dump(vis_list, f)
-
 
         bleu_score, rouge_score, cider_score, bleurt_score, iou, precision, recall = self.get_cap_metrics()
         self.log("bleu", bleu_score, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)

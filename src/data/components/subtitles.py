@@ -346,26 +346,17 @@ class Subtitles(Dataset):
                     break
                 if self.subtitles["episode_name"][idx - i - 1] != self.subtitles["episode_name"][idx]:
                     continue
-
-                if self.setname == "train" and random.random() < self.train_cap_prob:
-                    try:
-                        prev_text = self.train_cap[str(self.subtitles["id"][idx - i - 1])]["pred"]
-                    except:
+                
+                if self.setname == "train":
+                    if random.random() < self.train_cap_prob:
+                        prev_text = self.train_cap[str(idx - i - 1)]["pred"]
+                    else:
                         prev_text = self.subtitles["subtitle"][idx - i - 1]
-                        prev_text = sample_sub_prev(prev_text, pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
-
-                        if previous_context is None:
-                            previous_context = prev_text
-                        else:
-                            previous_context = prev_text + ' ' + previous_context
-                        
-                        continue
-                
-                prev_text = self.subtitles["subtitle"][idx - i - 1]
-                
-                if self.aug_prev and self.setname == "train":
                     prev_text = sample_sub_prev(prev_text, pct=self.aug_prev_pct, shuffle=self.aug_prev_shuffle)
 
+                else:
+                    prev_text = self.subtitles["subtitle"][idx - i - 1]
+                
                 if previous_context is None:
                     previous_context = prev_text
                 else:
