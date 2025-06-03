@@ -42,6 +42,7 @@ Download both from the official BOBSL dataset page hosted by the VGG group.
 Scroll to the **"Automatic Annotations"** section on the website, and download:
 
 > **CONTINUOUS SIGN SEQUENCES - SWIN V2 FEATURES PSEUDO-LABELS → LMDB**
+> **Backgounrd Captions - BLIP2 → download**
 
 Scroll to the **"Video Features"** section on the website, and download:
 
@@ -50,8 +51,9 @@ Scroll to the **"Video Features"** section on the website, and download:
 
 | Variable                 | Path                                                                             |
 | ------------------------ | -------------------------------------------------------------------------------- |
-| `annotations_pkl`        | {Automatic Annotations directory}                                                |
-| `vid_features_lmdb`      | {Video Features directory}                                                       |
+| `annotations_pkl`        | {PSEUDO-LABELS FOLDER}                                                |
+| `blip_cap_path`        | {BLIP2 CAPTION FILE}                                                |
+| `vid_features_lmdb`      | {Video Features FOLDER}                                                       |
 
 ## 📊 Step 4: Download BLEURT Model for Evaluation
 
