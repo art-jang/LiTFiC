@@ -69,7 +69,7 @@ add the option `logger=wandb` to your training command. For example:
 python src/train.py trainer.devices=[0,1,2,3] task_name=vid experiment=vid logger=wandb
 ```
 
-## Evaluation ([Pretrained Checkpoint]([download](https://mm.kaist.ac.kr/projects/LiCFiC/bobsl_all.ckpt)))
+## Evaluation ([Pretrained Checkpoint](https://mm.kaist.ac.kr/projects/LiCFiC/bobsl_all.ckpt))
 
 To evaluate a trained model, run the following command:
 
