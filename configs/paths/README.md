@@ -41,13 +41,12 @@ Download both from the official BOBSL dataset page hosted by the VGG group.
 
 Scroll to the **"Automatic Annotations"** section on the website, and download:
 
-> **CONTINUOUS SIGN SEQUENCES - SWIN V2 FEATURES PSEUDO-LABELS → LMDB**
-
-> **Backgounrd Captions - BLIP2 → download**
+- CONTINUOUS SIGN SEQUENCES - SWIN V2 FEATURES PSEUDO-LABELS → LMDB
+- Background Captions - BLIP2 → Download
 
 Scroll to the **"Video Features"** section on the website, and download:
 
-> **SWIN FEATURES V2 → LMDB**
+- SWIN FEATURES V2 → LMDB
 
 
 | Variable                 | Path                                                                             |
