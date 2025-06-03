@@ -27,7 +27,7 @@ aligned_subtitles_path: bobsl/cslr_annotation/bobsl/subtitles_pkl/manually-align
 synonyms_pkl: bobsl/cslr_annotation/bobsl/syns/synonym_pickle_english_and_signdict_and_signbank.pkl
 llm_root: Meta-Llama-3-8B
 bleurt_path: lucadiliello/BLEURT-20
-blip_cap_path: ./blip2_captions_v2.pkl
+blip_cap_path: ./blip2_captions_cleaned.pkl
 val_episode_ind_path: ./val_start_indices.json
 test_episode_ind_path: ./test_start_indices.json
 train_cap_path: ./prev_gt_captions.json
