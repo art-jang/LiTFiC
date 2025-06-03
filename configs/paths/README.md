@@ -70,7 +70,7 @@ You can use the BLEURT-20 model from Hugging Face to automatically compute evalu
 - `test_episode_ind_path`: Start indices of manually segmented test episodes for DDP inference
 - `train_cap_path`: Previous captions extracted from a model (Vid+PG+BG)
 
-| Variable                 | Path                                                                             |
+| Variable                 | File name
 | ------------------------ | -------------------------------------------------------------------------------- |
 | `val_episode_ind_path`   | val_start_indices.json [download](https://mm.kaist.ac.kr/projects/LiCFiC/val_start_indices.json)   |
 | `test_episode_ind_path`   | test_start_indices.json [download](https://mm.kaist.ac.kr/projects/LiCFiC/test_start_indices.json)   |
