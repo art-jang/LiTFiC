@@ -159,3 +159,4 @@ slurm_logs/
 
 /bobsl/
 *.zip
+*profanity.py

@@ -103,9 +103,9 @@ We would like to thank the authors of these projects for their contributions to 
 If you find our work useful for your research, please consider citing:
 
 ```bibtex
-@article{jang2025lost,
+@INPROCEEDINGS{jang2025lost,
   title={Lost in Translation, Found in Context: Sign Language Translation with Contextual Cues},
   author={Jang, Youngjoon and Raajesh, Haran and Momeni, Liliane and Varol, G{\"u}l and Zisserman, Andrew},
-  journal={arXiv preprint arXiv:2501.09754},
+  booktitle={CVPR},
   year={2025}
 }

@@ -50,8 +50,8 @@ Scroll to the **"Video Features"** section on the website, and download:
 
 | Variable                 | Path                                                                             |
 | ------------------------ | -------------------------------------------------------------------------------- |
-| `annotations_pkl`         | {Automatic Annotations directory}                                               |
-| `vid_features_lmdb`         | {Video Features directory}                                               |
+| `annotations_pkl`        | {Automatic Annotations directory}                                                |
+| `vid_features_lmdb`      | {Video Features directory}                                                       |
 
 ## 📊 Step 4: Download BLEURT Model for Evaluation
 
@@ -61,15 +61,17 @@ You can use the BLEURT-20 model from Hugging Face to automatically compute evalu
 
 | Variable                 | Path                                                                             |
 | ------------------------ | -------------------------------------------------------------------------------- |
-| `bleurt_path`         | lucadiliello/BLEURT-20 (will automatically download this model) |
+| `bleurt_path`            | lucadiliello/BLEURT-20 (will automatically download this model)                  |
 
 
 ## 🧪 Step 5: Download Additional Resources (Custom Captions & Split Info)
 
-### 📂 Files to be released:
+- `val_episode_ind_path`: Start indices of manually segmented validation episodes for DDP inference
+- `test_episode_ind_path`: Start indices of manually segmented test episodes for DDP inference
+- `train_cap_path`: Previous captions extracted from a model (Vid+PG+BG)
 
-- `blip_cap_path`: BLIP2-based image captions (`blip2_captions_v2.pkl`)
-- `val_episode_ind_path`: Start indices of manually segmented validation episodes (`man_val_final_start_indices.json`)
-- `test_episode_ind_path`: Start indices of manually segmented test episodes (`man_test_final_start_indices.json`)
-- `train_cap_path`: Training previous captions
-- `spottings_path`: Spottings annotations
+| Variable                 | Path                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `val_episode_ind_path`   | val_start_indices.json [download](https://mm.kaist.ac.kr/projects/LiCFiC/val_start_indices.json)   |
+| `test_episode_ind_path`   | test_start_indices.json [download](https://mm.kaist.ac.kr/projects/LiCFiC/test_start_indices.json)   |
+| `train_cap_path`   | val_start_indices.json [download](https://mm.kaist.ac.kr/projects/LiCFiC/prev_captions.json)   |
