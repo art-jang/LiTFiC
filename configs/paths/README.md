@@ -75,5 +75,5 @@ You can use the BLEURT-20 model from Hugging Face to automatically compute evalu
 | Variable                 | File name
 | ------------------------ | -------------------------------------------------------------------------------- |
 | `val_episode_ind_path`   | val_start_indices.json [download](https://mm.kaist.ac.kr/share/jyj/LiTFiC/val_start_indices.json)   |
-| `test_episode_ind_path`   | test_start_indices.json [download](https://mm.kaist.ac.kr/share/jyj/LiCFiC/test_start_indices.json)   |
-| `train_cap_path`   | val_start_indices.json [download](https://mm.kaist.ac.kr/share/jyj/LiCFiC/prev_captions.json)   |
+| `test_episode_ind_path`   | test_start_indices.json [download](https://mm.kaist.ac.kr/share/jyj/LiTFiC/test_start_indices.json)   |
+| `train_cap_path`   | val_start_indices.json [download](https://mm.kaist.ac.kr/share/jyj/LiTFiC/prev_captions.json)   |
