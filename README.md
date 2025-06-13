@@ -16,7 +16,7 @@
 ```bash
 # clone project
 git clone https://github.com/art-jang/Lost-in-Translation-Found-in-Context.git
-cd vgg_slt_pre_release
+cd LiTFiC
 
 conda create -n myenv python=3.10
 conda activate myenv
@@ -30,7 +30,6 @@ conda install nvidia/label/cuda-12.1.0::cuda-toolkit
 pip install -r requirements.txt
 conda install bioconda::java-jdk
 ```
-
 
 ## 📥 Data Download for Training and Testing
 
