@@ -36,7 +36,7 @@ conda install bioconda::java-jdk
 To train and test the model properly, please follow the detailed instructions on how to download and prepare the datasets.
 
 You can find the full explanation and configuration details here:  
-➡️ [Dataset Paths and Download Instructions](https://github.com/art-jang/Lost-in-Translation-Found-in-Context/tree/main/configs/paths)
+➡️ [Dataset Paths and Download Instructions](https://github.com/art-jang/LiTFiC/tree/main/configs/paths)
 
 This guide covers all necessary datasets, including annotations, video features, subtitles, and more.
 
